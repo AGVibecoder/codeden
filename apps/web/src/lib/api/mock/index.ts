@@ -9,6 +9,7 @@ import type { CodeDenClient } from "../client";
 import { ApiRequestError } from "../http";
 import { startAmbient } from "./ambient";
 import { mockAutomationsApi } from "./automations";
+import { mockExportSession } from "./export-session";
 import { mockFactoryApi } from "./factory";
 import { startFactoryDemo } from "./factory-demo";
 import { mockFeatureApis } from "./feature-apis";
@@ -248,6 +249,7 @@ export function createMockClient(opts: MockClientOptions = {}): CodeDenClient {
       world.emitDomain({ type: "session.created", sessionId: null, payload: { session } });
       return delay({ sessionId: id }, 200);
     },
+    exportSession: (sessionId) => delay(mockExportSession(world.sessionSnapshot(sessionId)), 150),
     async handoffSession(sessionId, req) {
       const source = world.snapshot.sessions.find((s) => s.id === sessionId);
       if (!source) throw new Error("Session not found");

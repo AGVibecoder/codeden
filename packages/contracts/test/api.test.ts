@@ -16,6 +16,7 @@ import {
   ReorderProjectsRequest,
   RetryInboxResponse,
   SendMessageRequest,
+  SessionTranscriptExport,
   SetupCheck,
   SetupToolId,
   StartSessionRequest,
@@ -229,6 +230,13 @@ describe("api schemas", () => {
     expect(ForkSessionRequest.safeParse({ turnId: "" }).success).toBe(false);
     roundTrip(ForkSessionResponse, { sessionId: "s2" });
     expect(ForkSessionResponse.safeParse({}).success).toBe(false);
+  });
+
+  it("round-trips a session transcript export", () => {
+    const file = { fileName: "fix-login-2026-11-14.md", markdown: "# Fix login\n" };
+    expect(roundTrip(SessionTranscriptExport, file)).toEqual(file);
+    expect(SessionTranscriptExport.safeParse({ fileName: "", markdown: "" }).success).toBe(false);
+    expect(SessionTranscriptExport.safeParse({ fileName: "a.md" }).success).toBe(false);
   });
 
   it("round-trips handoff requests and responses", () => {
