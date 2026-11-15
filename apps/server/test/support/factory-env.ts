@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   type BillingMode,
   FactoryLimits,
+  type ModelInfo,
   type Notice,
   type Project,
   type ProviderInfo,
@@ -78,6 +79,8 @@ export interface FactoryEnv {
     opts?: { tokens?: number; ts?: string; costSource?: LedgerTurn["costSource"] },
   ) => void;
   providers: string[];
+  /** The models a provider lists (none unless a test sets them), as the runner reports them. */
+  models: Record<string, ModelInfo[]>;
   /** What detection reports per provider, over "installed and signed in". */
   detected: Record<string, Partial<ProviderStatus>>;
   /** How many times the factory asked the runner to detect providers. */
@@ -180,6 +183,7 @@ export function createFactoryEnv(
     ledger: [],
     billing: {},
     providers: opts.providers ?? ["claude", "codex"],
+    models: {},
     detected: {},
     detections: 0,
     rateLimits: [],
@@ -206,6 +210,7 @@ export function createFactoryEnv(
         workKey: req.workKey ?? "request:work",
         scope: { projectId: req.projectId, ...req.scope },
         provider,
+        model: req.model ?? null,
         status: "running",
         issue: req.issue ?? null,
         cwd: existing ?? worktreePath ?? dir,
@@ -243,7 +248,10 @@ export function createFactoryEnv(
   } as unknown as SessionService;
   env.sessions = sessions;
   const runner = {
-    providers: () => env.providers.map((id) => ({ id, displayName: id }) as ProviderInfo),
+    providers: () =>
+      env.providers.map(
+        (id) => ({ id, displayName: id, models: env.models[id] ?? [] }) as ProviderInfo,
+      ),
     isConnected: () => true,
     // Provider detection: installed and signed in unless a test says otherwise.
     request: async (command: { name: string }) => {
