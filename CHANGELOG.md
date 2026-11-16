@@ -6,6 +6,23 @@ All notable changes to CodeDen are documented here. The format follows [Keep a C
 
 The notes for the next release are in [`changes/`](changes/README.md), one file per change. The release moves them into a version section here.
 
+## [0.7.7] - 2026-11-16
+
+### Changed
+
+- **A new logo.** The CodeDen mark is now a hex nut split down the middle into a C and a D, whose halves also read as the `<` `>` of a code tag. It replaces the old hexagon in the app, the browser tab, the installed web app and the desktop app and tray icons.
+
+### Fixed
+
+- **The integrator that takes over a factory pull request no longer starts on a signed-out or usage-limited provider while another one is free.** When the session that wrote a PR was gone and the PR had merge conflicts, or CI never started on it, the integrator always started on the default provider and ignored the factory's provider back-offs. The PR then sat, or its integrator failed. The integrator's provider and model are now chosen like the item's builder's, with the same fallback. While no provider is available it waits ("Waiting: no integration provider available …") without holding an agent slot, and starts once a provider is free.
+- **An integrator whose start never reached its provider no longer stays in charge of the PR without its brief.** After the item failed outside its code, the recovery kept such an integrator as the PR's agent. The next conflict or CI kick then sent it only a rebase or "re-run CI" request, on the provider that had refused it. It is now let go and archived. The provider that refused it is backed off, and the next conflict or CI kick starts a fresh integrator, with its full brief, on an available provider.
+- **`Pop-Location` and `popd` no longer make a later command in the worktree ask at Auto.** `Push-Location HKCU:\Software; Pop-Location; Remove-Item dist -Recurse` asked with "Deletes dist, outside the worktree", because the location never went back. `pushd` and `Push-Location` now keep a stack that `popd` and `Pop-Location` return to.
+
+### Security
+
+- **Registry writes, lasting environment changes and `New-Item` outside the worktree now ask at Auto.** `reg add`, `reg import`, `regedit /s file.reg`, `Set-ItemProperty HKCU:\…\Run`, `New-Item HKCU:\Software\Foo`, `New-ItemProperty` and the other item cmdlets on a registry or `Cert:` path ran without asking, so an agent could add an autostart entry. So did `setx PATH …` and `[Environment]::SetEnvironmentVariable(…, 'User')`, which change the environment for good, and `New-Item C:\Users\me\profile.ps1 -Value …`, while `Set-Content` on the same file asked. They now ask like any write outside the worktree. So does a relative delete or write after a `cd` onto a registry drive (`cd HKCU:\Software; Remove-Item Foo -Recurse`), which looked like a path in the worktree. Commands run through `cmd //c` from Git Bash are now checked like `cmd /c`. Registry reads, `New-Item` in the worktree or temp, folders made with `New-Item -ItemType Directory`, and writes to the shell's own `Env:`, `Variable:`, `Function:` and `Alias:` drives still run freely.
+- **Commands run through `Start-Process`, and piped renames with a script block, now ask at Auto.** `Start-Process reg -ArgumentList 'add','HKCU\Software\Foo'`, `saps setx -ArgumentList 'PATH C:\x'`, `Start-Process powershell -ArgumentList '-Command','Remove-Item C:\Users\me\x -Recurse'` and `Start-Process cmd -ArgumentList '/c rd /s /q C:\Users\me\x'` ran without asking, so wrapping a command in `Start-Process` got around the registry, environment and delete checks. CodeDen now judges the program it starts, with its `-ArgumentList`, from its `-WorkingDirectory`, like the same command run directly, and cmd's `start reg add …` too. `-Verb RunAs` asks like `sudo`, and `-RedirectStandardOutput` to a file outside the worktree asks like `>`. `Get-ChildItem C:\Users\me\Docs | Rename-Item -NewName { $_.Name + '.bak' }`, the usual way to rename many files at once, ran freely too, as did `Move-Item -Destination { … }` and `Set-ItemProperty -Value { … }` fed by a pipe. A script block is now read as one argument, so these ask like their plain forms. Opening a program, file or URL with `Start-Process`, and script blocks over the worktree, still run freely.
+
 ## [0.7.6] - 2026-11-16
 
 ### Added
