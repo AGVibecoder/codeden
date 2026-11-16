@@ -176,6 +176,65 @@ export function displayCanvas(value: string, caption: string, p: FloorPalette): 
   return canvas;
 }
 
+/**
+ * The status board over the dock: today's merges, agents working and items waiting on you, as
+ * three big figures with their captions. The waiting figure is amber when someone waits.
+ */
+export function boardCanvas(
+  merged: number,
+  working: number,
+  waiting: number,
+  p: FloorPalette,
+): HTMLCanvasElement {
+  const canvas = canvasOf(576, 176);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  ctx.fillStyle = hex(p.sign);
+  ctx.fillRect(0, 0, 576, 176);
+  ctx.strokeStyle = hex(p.lane);
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, 570, 170);
+  const cols: [string, string, string][] = [
+    [String(merged), "MERGED TODAY", hex(p.lamp.green)],
+    [String(working), "AGENTS WORKING", p.signInk],
+    [String(waiting), "WAITING ON YOU", waiting > 0 ? hex(p.lamp.amber) : p.signInk],
+  ];
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  cols.forEach(([value, caption, ink], i) => {
+    const x = 96 + i * 192;
+    if (i > 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(i * 192, 24, 2, 128);
+    }
+    ctx.fillStyle = ink;
+    ctx.font = `700 72px ${FONT}`;
+    ctx.fillText(value, x, 74);
+    ctx.fillStyle = p.signInk;
+    ctx.font = `600 19px ${FONT}`;
+    ctx.fillText(caption, x, 138);
+  });
+  return canvas;
+}
+
+/** The sign on intake's door while the factory drains: CLOSED, in white on red. */
+export function closedCanvas(p: FloorPalette): HTMLCanvasElement {
+  const canvas = canvasOf(240, 80);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  ctx.fillStyle = hex(p.lamp.red);
+  ctx.fillRect(0, 0, 240, 80);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(6, 6, 228, 68);
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `800 46px ${FONT}`;
+  ctx.fillText("CLOSED", 120, 43);
+  return canvas;
+}
+
 /** The budget dial: a round gauge from green through amber to red, its needle at `fraction`. */
 export function dialCanvas(fraction: number, p: FloorPalette): HTMLCanvasElement {
   const canvas = canvasOf(256, 256);
@@ -280,6 +339,57 @@ export function slatsCanvas(p: FloorPalette): HTMLCanvasElement {
   for (let y = 6; y < 128; y += 12) ctx.fillRect(0, y, 128, 2);
   ctx.fillStyle = "rgba(255,255,255,0.12)";
   for (let y = 8; y < 128; y += 12) ctx.fillRect(0, y, 128, 1);
+  return canvas;
+}
+
+/** The scout's map: the codebase as a few regions on a grid, with pins where it looked. */
+export function mapCanvas(p: FloorPalette): HTMLCanvasElement {
+  const canvas = canvasOf(256, 128);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  ctx.fillStyle = "#e9e3d3";
+  ctx.fillRect(0, 0, 256, 128);
+  ctx.strokeStyle = "rgba(60, 70, 90, 0.18)";
+  ctx.lineWidth = 1;
+  for (let x = 16; x < 256; x += 16) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 128);
+    ctx.stroke();
+  }
+  for (let y = 16; y < 128; y += 16) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(256, y);
+    ctx.stroke();
+  }
+  const regions: [number, number, number, number, Rgb][] = [
+    [18, 14, 80, 46, p.accent.reviewer],
+    [110, 20, 70, 60, p.accent.pm],
+    [190, 12, 52, 50, p.accent.scout],
+    [30, 72, 96, 42, p.lane],
+    [150, 86, 86, 30, p.accent.rebaser],
+  ];
+  for (const [x, y, w, h, rgb] of regions) {
+    ctx.fillStyle = `${hex(rgb)}55`;
+    ctx.strokeStyle = hex(rgb);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = hex(p.lamp.red);
+  for (const [x, y] of [
+    [60, 34],
+    [146, 52],
+    [212, 30],
+    [88, 92],
+  ] as const) {
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
   return canvas;
 }
 

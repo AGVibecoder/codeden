@@ -28,7 +28,7 @@ export function useChatColumn(): boolean {
   return useMedia("(min-width: 1280px)", true);
 }
 
-/** True at `sm` (640 px) and wider: room for the pixel scene (#209). Phones get the board. */
+/** True at `sm` (640 px) and wider: room for both storeys and the roster beside the floor. */
 export function useRoomy(): boolean {
   return useMedia("(min-width: 640px)", true);
 }

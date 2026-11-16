@@ -14,14 +14,14 @@ import type { Scene } from "../scene/scene-model";
 import { stationOf } from "../scene/stations";
 import { at, colour, type Kit } from "./kit";
 import type { FloorPalette } from "./palette";
-import { dialCanvas, displayCanvas, whiteboardCanvas } from "./textures";
+import { boardCanvas, closedCanvas, dialCanvas, displayCanvas, whiteboardCanvas } from "./textures";
 import { BELT_TOP, type BoxSpec, boxes } from "./workshop";
 
 /**
  * Floor mode's live props (#420): what follows the factory's state rather than the layout. The
  * tickets on intake's pallet (at most 8 drawn) and the sign with the full count, the signal
- * tower (amber while CI runs), a crate on the belt for each agent merging, today's merge count
- * over the dock door, the repair bay's crates (at most 3, by kind), the budget dial (hidden
+ * tower (amber while CI runs), a crate on the belt for each agent merging, the status board over
+ * the dock door (merges today, agents working, items waiting on you), the repair bay's crates (at most 3, by kind), the budget dial (hidden
  * without a budget) and each prep desk's prop: a bug jar for reproducing, a whiteboard for
  * analyzing. Rebuilt when any of it changes.
  */
@@ -38,8 +38,10 @@ export function propsKey(
     scene.tickets.items.length,
     scene.ciRunning,
     scene.shipped,
+    scene.board,
     scene.gauge === null ? null : Math.round(scene.gauge * 100),
     scene.bay.map((c) => [c.kind, c.entries.length]),
+    scene.draining !== null,
     [...occupied],
     layout.bounds,
     p,
@@ -76,6 +78,17 @@ function display(
 }
 
 const CRATE_SIZE = 0.3;
+/** A repair bay crate's size. */
+export const BAY_CRATE = { w: 0.42, h: 0.34, d: 0.42 };
+
+/** Where the repair bay's crates stand (at most three), in the bay's order. */
+export function bayCrateSpots(layout: WorkshopLayout, n: number): { x: number; z: number }[] {
+  const bay = layout.bay;
+  return Array.from({ length: Math.min(3, n) }, (_, i) => ({
+    x: bay.x0 + 0.55 + i * 0.7,
+    z: bay.z0 + 0.75 + (i % 2) * 0.35,
+  }));
+}
 
 export function buildProps(
   scene: Scene,
@@ -157,28 +170,27 @@ export function buildProps(
   }
   add(boxes(kit, unit, kit.matte(p.wood), crates));
 
-  // Today's merges over the dock door.
+  // The status board over the dock door: today's merges, agents working, items waiting on you.
   const door = layout.shipDoor;
   add(
     display(
       kit,
-      displayCanvas(String(scene.shipped), "MERGED TODAY", p),
-      0.64,
-      0.32,
-      layout.bounds.x1 + 0.1,
-      1.47,
-      door.z,
+      boardCanvas(scene.shipped, scene.board.working, scene.board.waiting, p),
+      1.8,
+      0.55,
+      layout.bounds.x1 + 0.15,
+      1.62,
+      door.z + 0.2,
     ),
   );
 
   // The repair bay's crates, one per kind, with their counts.
-  const bay = layout.bay;
+  const spots = bayCrateSpots(layout, scene.bay.length);
   scene.bay.slice(0, 3).forEach((crate: BayCrate, i) => {
-    const x = bay.x0 + 0.55 + i * 0.7;
-    const z = bay.z0 + 0.75 + (i % 2) * 0.35;
+    const { x, z } = spots[i] as { x: number; z: number };
     const box = new Mesh(unit, kit.matte(p.crate[crate.kind], { roughness: 0.7 }));
-    box.scale.set(0.42, 0.34, 0.42);
-    box.position.set(x, 0.17, z);
+    box.scale.set(BAY_CRATE.w, BAY_CRATE.h, BAY_CRATE.d);
+    box.position.set(x, BAY_CRATE.h / 2, z);
     box.castShadow = true;
     group.add(box);
     group.add(
@@ -194,6 +206,12 @@ export function buildProps(
       ),
     );
   });
+
+  // Draining: a CLOSED sign hangs on intake's roll-up door until the factory resumes.
+  if (scene.draining !== null)
+    group.add(
+      display(kit, closedCanvas(p), 0.9, 0.3, layout.inDoor.x, 0.75, layout.bounds.z0 + 0.06, 0),
+    );
 
   // The budget dial on the back wall in its dark ring, when there is a budget.
   if (scene.gauge !== null) {

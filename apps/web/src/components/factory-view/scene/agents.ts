@@ -3,7 +3,7 @@ import { AREA_LABEL } from "@/components/factory/meta";
 import type { SessionInfo, ViewCard, ViewPipeline } from "../stages";
 
 /**
- * The factory floor's agents (#264, #420), for pixel mode and Floor mode: who works on the floor
+ * The factory floor's agents (#264, #420), for Floor mode: who works on the floor
  * right now, in which role, on which step and in which state. One agent per live work item (its
  * builder, reviewer, or the agent rebasing its pull request), plus the PM and, in a dark
  * factory, the scout and its area reviewers. Pure, so the mapping is unit-tested; each mode's
@@ -169,8 +169,8 @@ const SCOUT_ACTIVITY: Record<ScoutStatus["phase"], string> = {
   filing: "Filing issues",
 };
 
-/** At most this many area reviewers sit in the control room. */
-export const AREA_SEATS = 4;
+/** Area reviewers: one per review area, each at its pod on the Lookout. */
+export const AREA_SEATS = 8;
 
 export interface AgentInputs {
   f: FactoryStatus;
