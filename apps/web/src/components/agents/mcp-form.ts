@@ -1,4 +1,4 @@
-import type { McpServerSpec } from "@codeden/contracts";
+import type { McpServerSpec, McpStartCommand } from "@codeden/contracts";
 
 /** The MCP server form as plain strings (one entry per line for args, env and headers). */
 export interface McpForm {
@@ -11,6 +11,9 @@ export interface McpForm {
   headers: string;
   bearerTokenEnvVar: string;
   enabled: boolean;
+  /** `http` and `sse`: the program to start when the URL doesn't answer, and its arguments. */
+  startCommand: string;
+  startArgs: string;
 }
 
 export const emptyMcpForm: McpForm = {
@@ -23,6 +26,8 @@ export const emptyMcpForm: McpForm = {
   headers: "",
   bearerTokenEnvVar: "",
   enabled: true,
+  startCommand: "",
+  startArgs: "",
 };
 
 const lines = (text: string) =>
@@ -47,7 +52,15 @@ const pairsText = (rec: Record<string, string> | undefined, sep: string) =>
     .map(([k, v]) => `${k}${sep}${v}`)
     .join("\n");
 
-export function specToForm(spec: McpServerSpec): McpForm {
+/** The start command of an `http` or `sse` form, when one is filled in. */
+export function formToStart(form: McpForm): McpStartCommand | undefined {
+  const command = form.startCommand.trim();
+  if (form.type === "stdio" || !command) return undefined;
+  const args = lines(form.startArgs);
+  return { command, ...(args.length ? { args } : {}) };
+}
+
+export function specToForm(spec: McpServerSpec, start?: McpStartCommand): McpForm {
   if (spec.type === "stdio") {
     return {
       ...emptyMcpForm,
@@ -66,6 +79,8 @@ export function specToForm(spec: McpServerSpec): McpForm {
     headers: pairsText(spec.headers, ": "),
     bearerTokenEnvVar: spec.bearerTokenEnvVar ?? "",
     enabled: spec.enabled !== false,
+    startCommand: start?.command ?? "",
+    startArgs: (start?.args ?? []).join("\n"),
   };
 }
 

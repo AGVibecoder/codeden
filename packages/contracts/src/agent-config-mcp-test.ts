@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { McpServerSpec, McpServerTarget } from "./agent-config";
+import { McpServerSpec, McpServerTarget, McpStartCommand } from "./agent-config";
 
 /**
  * Connection test of one MCP server (§12.4): the runner connects to it as an agent would,
@@ -20,12 +20,21 @@ export const MCP_TEST_STDERR_LIMIT = 4000;
 export const MCP_TEST_DEFAULT_TIMEOUT_MS = 60_000;
 /** Longest timeout a test may ask for. */
 export const MCP_TEST_MAX_TIMEOUT_MS = 120_000;
+/**
+ * How long a test waits for a server it started with its start command to answer on its
+ * address, before the test's own timeout begins. Editors can take minutes to open.
+ */
+export const MCP_START_WAIT_MS = 180_000;
 
 /**
  * `POST /api/agent-config/mcp/test`. With `spec`, those (unsaved) values are tested, as from
- * the add/edit dialog; without it, the server saved at the target is.
+ * the add/edit dialog, with the request's `startCommand`; without it, the server saved at the
+ * target is, with its saved start command.
  */
-export const McpServerTestRequest = McpServerTarget.extend({ spec: McpServerSpec.optional() });
+export const McpServerTestRequest = McpServerTarget.extend({
+  spec: McpServerSpec.optional(),
+  startCommand: McpStartCommand.optional(),
+});
 export type McpServerTestRequest = z.infer<typeof McpServerTestRequest>;
 
 /**
@@ -77,6 +86,8 @@ export const McpServerTestResult = z.discriminatedUnion("ok", [
     morePages: z.boolean(),
     /** The first `MCP_TEST_MAX_TOOLS` of them. */
     tools: z.array(McpTestTool).max(MCP_TEST_MAX_TOOLS),
+    /** The server wasn't running, so the test started it with its start command (left running). */
+    started: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(false),

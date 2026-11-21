@@ -546,6 +546,7 @@ export function createServices(opts: ServicesOptions): AppServices {
       repo: sessionRepo,
       backupDir: join(opts.paths.backups, "agent-config"),
       disabledHooksFile: opts.paths.disabledHooks,
+      mcpStartCommandsFile: opts.paths.mcpStartCommands,
       // The proxy the session's own runner gave its agent; MCP tests stay on the home runner.
       mcpProxyUrl: (sessionId) => runners.forSession(sessionId).mcpProxyUrl(),
       runner: opts.runner,

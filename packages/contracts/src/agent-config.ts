@@ -181,12 +181,25 @@ export const McpServerSpec = z.discriminatedUnion("type", [
 ]);
 export type McpServerSpec = z.infer<typeof McpServerSpec>;
 
+/**
+ * How to start the program behind an `http` or `sse` server that isn't running (§12.4), such as
+ * an editor that serves MCP while it is open. It is a path on this machine, so it is kept in
+ * CodeDen's data folder and never written to a native config file.
+ */
+export const McpStartCommand = z.object({
+  command: z.string().min(1).max(2000),
+  args: z.array(z.string().max(2000)).max(100).optional(),
+});
+export type McpStartCommand = z.infer<typeof McpStartCommand>;
+
 /** One configured MCP server. `codeden` entries are CodeDen's own server (read-only). */
 export const McpServerEntry = z.object({
   provider: z.enum(["claude", "codex", "codeden"]),
   scope: McpConfigScope,
   name: z.string(),
   spec: McpServerSpec,
+  /** Started by a connection test when the server's address doesn't answer (`http`, `sse`). */
+  startCommand: McpStartCommand.optional(),
   /** The native file it is defined in. */
   file: z.string(),
   /** Project the entry belongs to (`local` and `project` scopes). */
@@ -214,8 +227,15 @@ export const McpServerTarget = z.object({
 });
 export type McpServerTarget = z.infer<typeof McpServerTarget>;
 
-/** `PUT /api/agent-config/mcp`: add or replace one server (other settings are kept). */
-export const McpServerUpsertRequest = McpServerTarget.extend({ spec: McpServerSpec });
+/**
+ * `PUT /api/agent-config/mcp`: add or replace one server (other settings are kept).
+ * `startCommand` sets the server's start command, `null` removes it, and leaving it out keeps
+ * the saved one.
+ */
+export const McpServerUpsertRequest = McpServerTarget.extend({
+  spec: McpServerSpec,
+  startCommand: McpStartCommand.nullable().optional(),
+});
 export type McpServerUpsertRequest = z.infer<typeof McpServerUpsertRequest>;
 
 /** `POST /api/agent-config/mcp/diff`: preview an upsert (with `spec`) or a removal (without). */

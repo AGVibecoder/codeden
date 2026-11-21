@@ -1,6 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import {
+  MCP_START_WAIT_MS,
   MCP_TEST_DEFAULT_TIMEOUT_MS,
   MCP_TEST_DESCRIPTION_LIMIT,
   MCP_TEST_ERROR_LIMIT,
@@ -9,6 +10,7 @@ import {
   MCP_TEST_STDERR_LIMIT,
   type McpServerSpec,
   type McpServerTestResult,
+  type McpStartCommand,
   type McpStdioEnv,
   type McpTestStage,
   type McpTestTool,
@@ -21,6 +23,7 @@ import { childEnv } from "../process/env";
 import type { ProcessSupervisor } from "../process/supervisor";
 import { killTreeAndOrphans } from "../process/tree";
 import { type ResolvedMcpServer, resolveMcpSpec } from "./resolve-spec";
+import { ensureServerStarted } from "./start-command";
 import { ALLOWLIST_NOTE, codexEnvVarNames, stdioServerEnv } from "./stdio-env";
 import { McpStdioTransport, type SpawnServer } from "./stdio-transport";
 
@@ -45,6 +48,12 @@ export interface McpServerTestOptions {
   spawn?: SpawnServer;
   /** Stops a stdio server's whole process tree (`killTreeAndOrphans` by default). */
   stopTree?: (pid: number) => Promise<void>;
+  /** Run when an `http` or `sse` server's address doesn't answer; what it starts keeps running. */
+  start?: McpStartCommand;
+  /** Longest wait for a started server's address (`MCP_START_WAIT_MS` by default). */
+  startWaitMs?: number;
+  /** Starts and awaits the server behind a URL (`ensureServerStarted` by default). */
+  ensureStarted?: typeof ensureServerStarted;
 }
 
 /** Keeps the last `limit` characters written to it. */
@@ -79,6 +88,7 @@ export async function testMcpServer(opts: McpServerTestOptions): Promise<McpServ
   let timedOut = false;
   let protocolVersion: string | null = null;
   let stdio: McpStdioTransport | null = null;
+  let launched = false;
 
   const stdioEnv = opts.stdioEnv ?? "inherit";
   const fail = (error: unknown): McpServerTestResult => {
@@ -103,6 +113,17 @@ export async function testMcpServer(opts: McpServerTestOptions): Promise<McpServ
   try {
     const server = resolveMcpSpec(opts.spec, { expandEnv: opts.expandEnv, env });
     const cwd = (server.type === "stdio" ? server.cwd : undefined) ?? opts.cwd ?? homedir();
+    if (server.type !== "stdio" && opts.start) {
+      // Before the test's own timeout: an editor may take minutes to open.
+      launched = await (opts.ensureStarted ?? ensureServerStarted)({
+        url: parseUrl(server.url),
+        start: opts.start,
+        cwd,
+        env,
+        waitMs: opts.startWaitMs ?? MCP_START_WAIT_MS,
+        spawn: opts.spawn,
+      });
+    }
     const transport: Transport = createTransport(server, {
       cwd,
       env,
@@ -150,6 +171,7 @@ export async function testMcpServer(opts: McpServerTestOptions): Promise<McpServ
       toolCount,
       morePages,
       tools,
+      ...(launched ? { started: true } : {}),
     };
   } catch (error) {
     return fail(error);
@@ -192,16 +214,19 @@ function createTransport(
       spawn: ctx.spawn,
     });
   }
-  let url: URL;
-  try {
-    url = new URL(server.url);
-  } catch {
-    throw new Error(`Not a valid URL: ${server.url}`);
-  }
+  const url = parseUrl(server.url);
   const requestInit = { headers: server.headers };
   return server.type === "sse"
     ? new SSEClientTransport(url, { requestInit })
     : new StreamableHTTPClientTransport(url, { requestInit });
+}
+
+function parseUrl(text: string): URL {
+  try {
+    return new URL(text);
+  } catch {
+    throw new Error(`Not a valid URL: ${text}`);
+  }
 }
 
 /** Every page of `tools/list`, up to `MCP_TEST_MAX_PAGES`; `morePages` when it stopped early. */

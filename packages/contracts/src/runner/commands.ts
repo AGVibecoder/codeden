@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { McpServerSpec } from "../agent-config";
+import { McpServerSpec, McpStartCommand } from "../agent-config";
 import {
   MCP_TEST_MAX_TIMEOUT_MS,
   McpServerTestResult,
@@ -367,6 +367,11 @@ export const RunnerCommand = z.discriminatedUnion("name", [
     stdioEnv: McpStdioEnv.optional(),
     /** Default `MCP_TEST_DEFAULT_TIMEOUT_MS`. */
     timeoutMs: z.int().positive().max(MCP_TEST_MAX_TIMEOUT_MS).optional(),
+    /**
+     * Run this when an `http` or `sse` server's address doesn't answer, wait up to
+     * `MCP_START_WAIT_MS` for it, then test. What it starts is left running.
+     */
+    start: McpStartCommand.optional(),
   }),
   /** `fs.*` and `transfer.*` (`docs/remote-runners.md` §10), defined in `./workspace-fs`. */
   ...WorkspaceFsCommands,
