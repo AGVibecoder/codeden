@@ -9,7 +9,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type {
   AgentConfigDeleteResponse,
   AgentConfigDiff,
@@ -20,7 +20,7 @@ import type {
 import { structuredPatch } from "diff";
 import { badRequest, conflict, forbidden, ServiceError } from "../errors";
 import { resolveInside } from "../files/path-guard";
-import { toRelative } from "./paths";
+import { homeGuardRoot, toRelative } from "./paths";
 
 const MAX_READ_BYTES = 2 * 1024 * 1024;
 
@@ -74,7 +74,9 @@ export class AgentConfigFiles {
   /** Validate a locator and resolve it to an absolute path. */
   resolve(locator: AgentConfigLocator, opts: { folder?: boolean } = {}): ResolvedLocation {
     const dir = this.rootDir(locator);
-    const absolutePath = resolveInside(dir, locator.path);
+    // In the home folder, `~/.claude` and `~/.codex` may themselves be links the user made.
+    const guardRoot = locator.root === "home" ? homeGuardRoot(dir, locator.path) : dir;
+    const absolutePath = resolveInside(guardRoot, resolve(dir, locator.path));
     const relativePath = toRelative(dir, absolutePath);
     const segments = relativePath.split("/");
     if (!relativePath || segments.includes("..") || segments.includes(".git")) {

@@ -27,7 +27,10 @@ export interface HookFile {
   provider: AgentConfigProvider;
   scope: AgentConfigScope;
   projectId: string | null;
-  /** The folder the file must stay inside, links included: the home or the project checkout. */
+  /**
+   * The folder the file must stay inside, links included: `~/.claude` (which may itself be a
+   * link) or the project checkout.
+   */
   root: string;
   file: string;
 }
@@ -56,7 +59,8 @@ export function claudeHookFile(
       provider: "claude",
       scope: "user",
       projectId: null,
-      root: home,
+      // `~/.claude` itself may be a link the user made (to another drive); the file must stay in it.
+      root: join(home, ".claude"),
       file: join(home, ".claude", "settings.json"),
     };
   }

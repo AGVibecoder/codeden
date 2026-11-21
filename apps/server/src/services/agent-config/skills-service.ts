@@ -127,7 +127,7 @@ export class AgentConfigSkills {
   /** Codex's rules for listing; none when config.toml leads outside home or doesn't parse. */
   private codexRules(): unknown[] {
     try {
-      guard({ root: this.deps.home, file: this.codexConfig() });
+      guard({ root: dirname(this.codexConfig()), file: this.codexConfig() });
     } catch {
       return [];
     }
@@ -155,7 +155,8 @@ export class AgentConfigSkills {
       throw notFound(`No ${provider} skill at ${req.path}; reload the list`, "skill_not_found");
     }
     if (provider === "codex") {
-      const file = { root: this.deps.home, file: this.codexConfig() };
+      // `~/.codex` itself may be a link the user made; the file must stay in it.
+      const file = { root: dirname(this.codexConfig()), file: this.codexConfig() };
       guard(file);
       const target = { name: skill.name, path: skill.file.absolutePath };
       const byPath = skill.scope === "user";

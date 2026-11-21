@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, parse, relative, resolve, sep } from "node:path";
 import { claudeMemoryDir } from "@codeden/providers";
+import { isInside } from "../files/path-guard";
 
 export { claudeProjectSlug, findGitRoot, mainRepoRoot } from "@codeden/providers";
 
@@ -11,6 +12,23 @@ export { claudeProjectSlug, findGitRoot, mainRepoRoot } from "@codeden/providers
  */
 export function claudeAutoMemoryDir(home: string, repoRoot: string): string {
   return claudeMemoryDir(join(home, ".claude"), repoRoot, home);
+}
+
+/** The user's own config folders in the home folder, which may be links (to another drive). */
+const HOME_CONFIG_DIRS = [".claude", ".codex"];
+
+/**
+ * The folder a home-level config file must stay inside, links included: its `~/.claude` or
+ * `~/.codex` folder when it is in one, else the home folder. That folder itself may be a link
+ * the user made (such as to another drive); links inside it must still stay inside it.
+ */
+export function homeGuardRoot(home: string, file: string): string {
+  const target = resolve(home, file);
+  for (const name of HOME_CONFIG_DIRS) {
+    const dir = join(home, name);
+    if (isInside(resolve(dir), target)) return dir;
+  }
+  return home;
 }
 
 /** `dir` and its ancestors, nearest first, up to the filesystem root. */
