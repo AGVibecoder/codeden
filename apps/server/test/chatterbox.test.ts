@@ -116,6 +116,9 @@ describe("ChatterboxService", () => {
   it("installs AMD's PyTorch, Chatterbox and the model in order", async () => {
     const svc = service();
     const paths = fakeUv(svc.paths.base);
+    const cache = join(paths.cache, "uv");
+    mkdirSync(cache, { recursive: true });
+    writeFileSync(join(cache, "torch.whl"), "a second copy");
     expect((await svc.install({ model: "multilingual" })).runtime).toBe("installing");
     await expect.poll(async () => (await svc.status()).models.multilingual).toBe("installed");
     const steps = calls.map((c) => c.slice(1).join(" "));
@@ -125,6 +128,8 @@ describe("ChatterboxService", () => {
     expect(steps.some((s) => s.endsWith("check"))).toBe(true);
     expect(steps.at(-1)).toMatch(/download multilingual$/);
     expect(existsSync(paths.runtimeMarker)).toBe(true);
+    // uv's copy of the downloads is gone once the install works.
+    expect(existsSync(cache)).toBe(false);
     expect((await svc.status()).models.turbo).toBe("missing");
   });
 
