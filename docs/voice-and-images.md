@@ -62,10 +62,11 @@ When an agent's turn completes, CodeDen can read its final message aloud.
 
 Talk with the orchestrator hands-free.
 
-- **Start:** press the phone button next to the microphone in the orchestrator's message box, or say the wake word (below). A panel at the bottom right shows what's happening: Listening, Sending, Orchestrator is thinking, Speaking.
-- **Talking:** speak, then pause for about a second; what you said goes to the orchestrator. Its answer is spoken with your read-aloud engine and voice (Chatterbox, ElevenLabs or the browser), then it listens again. Read-aloud doesn't need to be switched on for calls.
+- **Start:** press the phone button next to the microphone in the orchestrator's message box, or say the wake word (below). A panel at the bottom right shows what's happening (Listening, Working on it, Speaking) and the microphone level.
+- **Talking:** the microphone stays on for the whole call. Each time you pause for about a second, what you said since the last pause goes to the orchestrator straight away, even while it is still working or speaking (it queues behind a running turn). Every answer it finishes is spoken with your read-aloud engine and voice (Chatterbox, ElevenLabs or the browser). Read-aloud doesn't need to be switched on for calls.
+- **Interrupting:** start talking and the answer stops at once.
 - Messages sent during a call start with a short note asking the orchestrator to answer in a few spoken sentences, without markdown or code.
-- The microphone is off while an answer plays, so it never hears itself. You can't talk over an answer; **Hang up** stops everything.
+- The microphone's echo cancellation keeps CodeDen's own voice out of what it hears when the answer comes from Chatterbox or ElevenLabs. Browser voices are played by Windows itself, outside that, so with them on speakers the answer can cut itself off: use headphones, or Chatterbox. **Hang up** stops everything.
 - Listening uses your dictation engine. With a cloud engine (ElevenLabs, OpenAI), what you say in a call is sent to that service.
 - **Wake word:** Settings → Voice → Dictation → **Wake word** listens for a phrase ("Hey Annie" by default) while CodeDen is open, and starts a call when it hears it. Words said right after it are your first message. It only works with the Browser and Local (Whisper) engines, so nothing goes to a cloud service while you aren't in a call.
 

@@ -42,43 +42,43 @@ let deps: { client: CodeDenClient; queryClient: QueryClient } | null = null;
 export const callActive = () => (current ? current.phase !== "ended" : false);
 
 /**
- * The orchestrator's answer to the message about to be sent: resolves with the final message
- * of the next orchestrator turn that finishes.
+ * Calls `onReply` with the final message of every orchestrator turn that finishes from now
+ * on; returns a stop.
  */
-function waitForOrchestrator(
+function watchOrchestrator(
   client: CodeDenClient,
   queryClient: QueryClient,
-  signal: AbortSignal,
-): Promise<string> {
+  onReply: (markdown: string) => void,
+): () => void {
   const statuses = new Map<string, SessionStatus>();
   for (const s of queryClient.getQueryData<Snapshot>(snapshotKey)?.sessions ?? []) {
     statuses.set(s.id, s.status);
   }
-  return new Promise<string>((resolve, reject) => {
-    let stop = () => {};
-    const done = (session: Session) => {
-      stop();
-      void client
-        .getSessionSnapshot(session.id, { turns: 3 })
-        .then((snap) => {
-          const state = transcriptFromSnapshot(snap);
-          const turn = latestCompletedRootTurn(state);
-          resolve((turn ? finalAssistantText(state, turn) : null) ?? "");
-        })
-        .catch(reject);
-    };
-    stop = onLiveEvent((env) => {
-      if (env.type !== "session.created" && env.type !== "session.updated") return;
-      const session = env.payload.session;
-      const prev = statuses.get(session.id);
-      statuses.set(session.id, session.status);
-      if (session.role === "orchestrator" && turnJustFinished(prev, session.status)) done(session);
-    });
-    signal.addEventListener("abort", () => {
-      stop();
-      reject(new Error("hung up"));
-    });
+  let stopped = false;
+  const finished = (session: Session) => {
+    void client
+      .getSessionSnapshot(session.id, { turns: 3 })
+      .then((snap) => {
+        const state = transcriptFromSnapshot(snap);
+        const turn = latestCompletedRootTurn(state);
+        const text = turn ? finalAssistantText(state, turn) : null;
+        if (text && !stopped) onReply(text);
+      })
+      .catch(() => undefined);
+  };
+  const stop = onLiveEvent((env) => {
+    if (env.type !== "session.created" && env.type !== "session.updated") return;
+    const session = env.payload.session;
+    const prev = statuses.get(session.id);
+    statuses.set(session.id, session.status);
+    if (session.role === "orchestrator" && turnJustFinished(prev, session.status)) {
+      finished(session);
+    }
   });
+  return () => {
+    stopped = true;
+    stop();
+  };
 }
 
 /** Voice calls with the orchestrator (§11.3): one call at a time, kept across pages. */
@@ -115,7 +115,7 @@ export const useCallStore = create<CallStore>()((set) => ({
           "queue",
         );
       },
-      waitForReply: (signal) => waitForOrchestrator(client, queryClient, signal),
+      watchReplies: (onReply) => watchOrchestrator(client, queryClient, onReply),
       speak: async (markdown, signal) => {
         const now = queryClient.getQueryData<Snapshot>(snapshotKey)?.settings ?? settings;
         const words = speechExcerpt(stripForSpeech(markdown), READ_ALOUD_FULL_MAX_CHARS);

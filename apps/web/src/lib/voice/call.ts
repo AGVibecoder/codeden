@@ -1,17 +1,17 @@
 import type { SpeechToText } from "./engines";
 
 /**
- * Where a call stands: `listening` (the microphone is on), `sending` (what you said goes to the
- * orchestrator), `thinking` (its turn runs), `speaking` (its answer plays), then listening
- * again; `ended` once hung up.
+ * What the orchestrator side of a call is doing: `listening` (waiting for you), `thinking` (a
+ * message of yours is being worked on), `speaking` (an answer plays); `ended` once hung up. The
+ * microphone is on in every phase but `ended`.
  */
-export type CallPhase = "listening" | "sending" | "thinking" | "speaking" | "ended";
+export type CallPhase = "listening" | "thinking" | "speaking" | "ended";
 
 export interface CallState {
   phase: CallPhase;
-  /** What you said last. */
+  /** What you said last (sent). */
   heard: string;
-  /** Text in progress while you speak. */
+  /** What you are saying now, not sent yet. */
   draft: string;
   /** The orchestrator's last answer, as spoken. */
   reply: string;
@@ -19,55 +19,99 @@ export interface CallState {
 }
 
 export interface CallDeps {
-  /** The dictation engine (browser or a server engine). */
+  /** The dictation engine (browser or a server engine); runs for the whole call. */
   engine: SpeechToText;
   language?: string | null;
-  /** Send what was said to the orchestrator. */
+  /** Send what was said to the orchestrator (queued behind a running turn). */
   send: (text: string) => Promise<void>;
-  /** Resolves with the orchestrator's answer to the message just sent (markdown). */
-  waitForReply: (signal: AbortSignal) => Promise<string>;
-  /** Speak an answer; resolves when it has played. */
+  /** Calls `onReply` with each answer the orchestrator finishes during the call; returns a stop. */
+  watchReplies: (onReply: (markdown: string) => void) => () => void;
+  /** Speak an answer; resolves when it has played or `signal` stops it. */
   speak: (markdown: string, signal: AbortSignal) => Promise<void>;
   onState: (state: CallState) => void;
   onLevel?: (level: number | null) => void;
   /** How long you may pause before what you said is sent (default 1.2 s). */
   pauseMs?: number;
-  /** Timers (fakes in tests). */
+  /** Timers and clock (fakes in tests). */
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  now?: () => number;
+}
+
+/** Sustained voice this long, in ms, cuts off an answer. */
+const BARGE_IN_MS = 150;
+/** Quietest level counted as a voice, whatever the room. */
+const MIN_VOICE_LEVEL = 0.02;
+/** A voice is this many times the room's level. */
+const VOICE_RATIO = 3;
+
+/**
+ * Tells a voice from the room by the microphone level: a floor that drops to quiet at once and
+ * rises slowly, and a voice that stays above it for `BARGE_IN_MS`.
+ */
+export class VoiceDetector {
+  private floor = 0;
+  private since: number | null = null;
+
+  constructor(private readonly now: () => number = () => performance.now()) {}
+
+  /** Feed one level; true once a voice has lasted long enough. */
+  push(level: number): boolean {
+    this.floor =
+      level < this.floor || this.floor === 0 ? level : this.floor + (level - this.floor) * 0.01;
+    const voice = level > Math.max(MIN_VOICE_LEVEL, this.floor * VOICE_RATIO);
+    if (!voice) {
+      this.since = null;
+      return false;
+    }
+    this.since ??= this.now();
+    return this.now() - this.since >= BARGE_IN_MS;
+  }
 }
 
 /**
- * A voice call with the orchestrator (§11.3), one turn at a time: listen until you pause, send
- * what you said, wait for its answer, speak it, listen again. The microphone is off while the
- * answer plays, so the answer never hears itself; you can't talk over it (hang up instead).
+ * A voice call with the orchestrator (§11.3). The microphone stays on for the whole call: each
+ * time you pause, what you said since the last pause is sent straight away, even while the
+ * orchestrator is working or speaking (it queues behind a running turn). Every answer the
+ * orchestrator finishes is spoken, and the moment you start talking it stops speaking. The
+ * microphone's echo cancellation keeps CodeDen's own voice out of what it hears.
  */
 export class VoiceCall {
   private state: CallState = { phase: "listening", heard: "", draft: "", reply: "", error: null };
-  private said = "";
+  /** How much of the engine's settled text has been sent. */
+  private sentLength = 0;
+  private settled = "";
   private timer: unknown = null;
-  private abort = new AbortController();
-  private listening = false;
+  private waiting = 0;
+  private speaking: AbortController | null = null;
+  private stopReplies: () => void = () => {};
+  private readonly voice: VoiceDetector;
+  private ended = false;
 
-  constructor(private readonly deps: CallDeps) {}
+  constructor(private readonly deps: CallDeps) {
+    this.voice = new VoiceDetector(deps.now);
+  }
 
   get phase(): CallPhase {
     return this.state.phase;
   }
 
-  /** Start listening; `first` is sent straight away (words said right after the wake word). */
+  /** Start the call; `first` is sent straight away (words said right after the wake word). */
   start(first?: string): void {
-    if (first?.trim()) void this.turn(first.trim());
-    else this.listen();
+    this.stopReplies = this.deps.watchReplies((markdown) => void this.answer(markdown));
+    this.listen();
+    if (first?.trim()) void this.send(first.trim());
   }
 
-  /** End the call: the microphone, the wait and the answer all stop. */
+  /** End the call: the microphone and any answer stop. */
   hangUp(): void {
-    if (this.state.phase === "ended") return;
-    this.abort.abort();
+    if (this.ended) return;
+    this.ended = true;
     this.clear();
-    if (this.listening) this.deps.engine.stop();
-    this.listening = false;
+    this.stopReplies();
+    this.speaking?.abort();
+    this.speaking = null;
+    this.deps.engine.stop();
     this.deps.onLevel?.(null);
     this.set({ phase: "ended", draft: "" });
   }
@@ -77,73 +121,104 @@ export class VoiceCall {
     this.deps.onState(this.state);
   }
 
+  private idlePhase(): CallPhase {
+    return this.waiting > 0 ? "thinking" : "listening";
+  }
+
   private clear(): void {
     if (this.timer !== null) (this.deps.clearTimer ?? clearTimeout)(this.timer as never);
     this.timer = null;
   }
 
+  /** You started talking: stop the answer that is playing. */
+  private interrupt(): void {
+    if (!this.speaking) return;
+    this.speaking.abort();
+    this.speaking = null;
+    this.set({ phase: this.idlePhase() });
+  }
+
   private listen(): void {
-    if (this.abort.signal.aborted) return;
-    this.said = "";
-    this.listening = true;
-    this.set({ phase: "listening", draft: "" });
+    if (this.ended) return;
+    this.sentLength = 0;
+    this.settled = "";
     this.deps.engine.start({
       language: this.deps.language,
       onText: (text) => {
-        if (!this.listening) return;
-        this.said = text.final;
-        this.set({ draft: [text.final, text.draft].filter(Boolean).join(" ") });
+        if (this.ended) return;
+        this.settled = text.final;
+        const fresh = text.final.slice(this.sentLength).trim();
+        const draft = [fresh, text.draft.trim()].filter(Boolean).join(" ");
+        if (draft) this.interrupt();
+        this.set({ draft });
         this.clear();
-        // Send once you have said something and paused, with nothing still being written.
-        if (text.final.trim() && !text.draft.trim()) {
+        // Send once you have said something new and paused, with nothing still being written.
+        if (fresh && !text.draft.trim()) {
           this.timer = (this.deps.setTimer ?? setTimeout)(
-            () => this.endUtterance(),
+            () => this.flush(),
             this.deps.pauseMs ?? 1200,
           );
         }
       },
-      onLevel: (level) => this.deps.onLevel?.(level),
+      onLevel: (level) => {
+        this.deps.onLevel?.(level);
+        if (this.voice.push(level)) this.interrupt();
+      },
       onEnd: () => {
-        if (!this.listening) return;
-        // The engine stopped on its own (a browser ends recognition after silence): go on.
-        this.listening = false;
-        if (this.said.trim()) void this.turn(this.said.trim());
-        else this.listen();
+        if (this.ended) return;
+        // The engine stopped on its own (a browser ends recognition after silence): send what
+        // is left and keep listening with a fresh transcript.
+        this.flush();
+        this.listen();
       },
       onError: (message) => this.fail(message),
     });
   }
 
-  private endUtterance(): void {
+  /** Send what was said since the last send. */
+  private flush(): void {
     this.timer = null;
-    if (!this.listening) return;
-    const text = this.said.trim();
-    this.listening = false;
-    this.deps.engine.stop();
-    this.deps.onLevel?.(null);
-    if (text) void this.turn(text);
+    const fresh = this.settled.slice(this.sentLength).trim();
+    this.sentLength = this.settled.length;
+    if (fresh) void this.send(fresh);
   }
 
-  private async turn(text: string): Promise<void> {
-    const signal = this.abort.signal;
+  private async send(text: string): Promise<void> {
+    this.waiting++;
+    this.set({
+      heard: text,
+      draft: "",
+      phase: this.speaking ? "speaking" : "thinking",
+    });
     try {
-      this.set({ phase: "sending", heard: text, draft: "" });
-      const reply = this.deps.waitForReply(signal);
       await this.deps.send(text);
-      if (signal.aborted) return;
-      this.set({ phase: "thinking" });
-      const answer = await reply;
-      if (signal.aborted) return;
-      this.set({ phase: "speaking", reply: answer });
-      await this.deps.speak(answer, signal);
-      if (!signal.aborted) this.listen();
     } catch (error) {
-      if (!signal.aborted) this.fail((error as Error).message);
+      this.waiting = Math.max(0, this.waiting - 1);
+      this.fail((error as Error).message);
+    }
+  }
+
+  /** Speak an answer; a newer answer replaces one still playing. */
+  private async answer(markdown: string): Promise<void> {
+    if (this.ended) return;
+    this.waiting = Math.max(0, this.waiting - 1);
+    this.speaking?.abort();
+    const controller = new AbortController();
+    this.speaking = controller;
+    this.set({ phase: "speaking", reply: markdown });
+    try {
+      await this.deps.speak(markdown, controller.signal);
+    } catch {
+      // A failed answer is skipped; the call goes on.
+    }
+    if (this.speaking === controller) {
+      this.speaking = null;
+      if (!this.ended) this.set({ phase: this.idlePhase() });
     }
   }
 
   private fail(message: string): void {
-    if (this.state.phase === "ended") return;
+    if (this.ended) return;
     this.set({ error: message });
     this.hangUp();
   }

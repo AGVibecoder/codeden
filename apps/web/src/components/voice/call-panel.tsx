@@ -13,9 +13,8 @@ import { callActive, useCallStore } from "@/stores/call";
 
 const PHASE_LABEL = {
   listening: "Listening…",
-  sending: "Sending…",
-  thinking: "Orchestrator is thinking…",
-  speaking: "Speaking…",
+  thinking: "Working on it…",
+  speaking: "Speaking · talk to interrupt",
   ended: "Call ended",
 } as const;
 
@@ -88,21 +87,22 @@ export function CallPanel() {
           <PhoneOff className="size-3" /> Hang up
         </Button>
       </div>
-      {state.phase === "listening" && (
-        <div className="h-1 overflow-hidden rounded bg-muted">
+      {/* The microphone is on for the whole call. */}
+      <div className="flex items-center gap-1.5">
+        <Mic className="size-3 text-muted-foreground" />
+        <div className="h-1 flex-1 overflow-hidden rounded bg-muted">
           <div
             className="h-full bg-status-done transition-[width] duration-75"
             style={{ width: `${Math.min(100, Math.round((level ?? 0) * 400))}%` }}
           />
         </div>
-      )}
+      </div>
       {(state.draft || state.heard) && (
         <p className="line-clamp-3 text-2xs text-muted-foreground">
-          <span className="text-foreground">You:</span>{" "}
-          {state.phase === "listening" ? state.draft || "…" : state.heard}
+          <span className="text-foreground">You:</span> {state.draft || state.heard}
         </p>
       )}
-      {state.reply && state.phase !== "listening" && state.phase !== "sending" && (
+      {state.reply && (
         <p className="line-clamp-4 text-2xs text-muted-foreground">
           <span className="text-foreground">Orchestrator:</span> {state.reply}
         </p>
