@@ -176,10 +176,17 @@ export const Settings = z.object({
           engine: DictationEngine.default("browser"),
           pushToTalkShortcut: z.string().nullable().default(null),
           /**
-           * BCP 47 tag such as `en-US`; null is auto (the browser engine follows the browser
-           * language, the server engines detect it). English-only Whisper models ignore it.
+           * @deprecated Superseded by `languages`; still read when `languages` is empty, so
+           * older settings keep their language. BCP 47 tag such as `en-US`; null is auto.
            */
           language: z.string().nullable().default(null),
+          /**
+           * The languages you dictate in (BCP 47 tags such as `nl-NL`), the first being your
+           * main one; empty is auto. With several, local Whisper detects which one you speak,
+           * and transcribes again in the main language when it hears another one. The browser
+           * engine takes the first; the cloud engines detect freely. See `dictationLanguages`.
+           */
+          languages: z.array(z.string().min(2).max(20)).max(8).default([]),
           /** Local Whisper: which downloaded model transcribes (§11.3). */
           local: z
             .object({

@@ -1,3 +1,4 @@
+import { dictationLanguageFor } from "@codeden/contracts";
 import { Loader2, Mic, Phone, PhoneOff, Volume2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -129,7 +130,7 @@ export function WakeWord() {
   const { settings } = useSettings();
   const wake = settings.voice.call.wakeWord;
   const choice = settings.voice.dictation.engine;
-  const language = settings.voice.dictation.language;
+  const language = dictationLanguageFor(settings.voice.dictation, choice);
   const phase = useCallStore((s) => s.state?.phase);
   const listener = useRef<WakeWordListener | null>(null);
   const allowed = wake.enabled && (choice === "browser" || choice === "local");

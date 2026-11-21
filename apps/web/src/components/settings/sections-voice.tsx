@@ -23,12 +23,11 @@ import {
   sampleFor,
   useChatterbox,
 } from "./sections-voice-chatterbox";
+import { DictationLanguagesRow } from "./sections-voice-languages";
 import { LocalWhisperRows } from "./sections-voice-local";
 import { WakeWordRows } from "./sections-voice-wake";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
 import { QuietHoursRow, ShortcutRecorder } from "./voice-controls";
-
-const LANGUAGES = ["auto", "en-US", "en-GB", "en-ZA", "de-DE", "fr-FR", "es-ES", "nl-NL"];
 
 /** Browser voices, refreshed when the browser finishes loading them. */
 function useBrowserVoices() {
@@ -142,32 +141,7 @@ export function VoiceSettings() {
           />
         </SettingRow>
         {v.dictation.engine === "local" && <LocalWhisperRows />}
-        <SettingRow
-          label="Language"
-          help={
-            v.dictation.engine === "browser"
-              ? "Leave on auto to follow the browser language."
-              : "Auto detects the spoken language. English-only Whisper models always use English."
-          }
-        >
-          <Select
-            value={v.dictation.language ?? "auto"}
-            onValueChange={(language) =>
-              update({ voice: { dictation: { language: language === "auto" ? null : language } } })
-            }
-          >
-            <SelectTrigger size="sm" className="w-40" aria-label="Dictation language">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.map((l) => (
-                <SelectItem key={l} value={l}>
-                  {l === "auto" ? "Auto" : l}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingRow>
+        <DictationLanguagesRow />
         <SettingRow
           label="Push-to-talk"
           help={`Hold to dictate, release to stop. Click, then press a key with ${formatCombo("mod")} or ${formatCombo("alt")} (or an F key).`}

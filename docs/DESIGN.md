@@ -719,6 +719,7 @@ Both sides sit behind provider interfaces, so engines can be swapped:
   - **Default:** the browser speech API.
   - **Optional:** a cloud engine (ElevenLabs or OpenAI).
   - **Optional:** **local Whisper**, offline and private, for browsers and shells without a working speech service (Firefox, Electron). Details below.
+  - **Languages** (`voice.dictation.languages`, main one first; the older single `language` is read while the list is empty, `dictationLanguages`). One language is handed to every engine. With several, the browser engine takes the first, the cloud engines get no hint, and local Whisper transcribes on `auto` and, when the language it reports isn't in the list, transcribes the segment again forced to the main language (the runtime reports one detected language, not per-language scores).
   - **Feature detection.** The browser engine counts as available only when the recognition API exists and its speech service has not failed here (a `network` or `service-not-allowed` error is remembered per browser until the user picks the browser engine again). Where it is unavailable, Settings and setup say so and suggest Local (Whisper). This is capability detection, never a check for a particular browser or shell.
 
 **Live dictation.** Text appears while the user speaks, with every engine.
