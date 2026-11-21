@@ -45,7 +45,7 @@ export function chatterboxEnv(paths: ChatterboxPaths): Record<string, string> {
     HF_HOME: paths.hfHome,
     HF_HUB_DISABLE_SYMLINKS_WARNING: "1",
     PKUSEG_HOME: join(paths.cache, "pkuseg"),
-    UV_CACHE_DIR: join(paths.cache, "uv"),
+    UV_CACHE_DIR: uvCache(paths),
     UV_PYTHON_INSTALL_DIR: paths.pythonDir,
     // AMD's MIOpen otherwise searches for the fastest method again for every new sound length.
     MIOPEN_FIND_MODE: "FAST",
@@ -168,7 +168,18 @@ export async function installRuntime(ctx: InstallContext, gpu: ChatterboxGpu): P
     paths.runtimeMarker,
     `${JSON.stringify({ gpu, check, at: new Date().toISOString() }, null, 2)}\n`,
   );
+  // uv keeps a second copy of every package it downloaded (about 6 GB with PyTorch). Once the
+  // install works it is never needed again; a failed install keeps it, so a retry goes faster.
+  ctx.report("Cleaning up downloads", null);
+  try {
+    rmSync(uvCache(paths), { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    // A file still in use stays; the install itself is done.
+  }
 }
+
+/** Where uv keeps its download cache (`UV_CACHE_DIR`). */
+export const uvCache = (paths: ChatterboxPaths) => join(paths.cache, "uv");
 
 /** Download a model into the Hugging Face cache in the CodeDen home; a marker says it is done. */
 export async function installModel(ctx: InstallContext, model: ChatterboxModel): Promise<void> {
