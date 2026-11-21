@@ -56,7 +56,17 @@ When an agent's turn completes, CodeDen can read its final message aloud.
 - Messages from different sessions **queue** instead of cutting each other off: each plays to the end, then the next. If several finish at once, only the latest three wait. Turning read-aloud off stops the current message and clears the queue; muting a session stops its message.
 - **Only when the tab isn't focused** keeps it quiet while you're looking.
 - **Mute one session** from its **Details** tab.
-- **Engines:** the browser's built-in voices (default, free) or ElevenLabs (pick a voice from your account).
+- **Engines:** the browser's built-in voices (default, free), ElevenLabs (pick a voice from your account), or **Chatterbox**, which runs on your own graphics card (below).
+
+### Chatterbox (local read-aloud)
+
+Chatterbox speaks with natural voices on your own computer, and can copy a voice from a short clip. It needs Windows and an NVIDIA or AMD Radeon graphics card, for now.
+
+- **Install:** pick **Chatterbox (local)** as the read-aloud engine and press **Install**. CodeDen detects your card and installs its own Python, the PyTorch build for that card (NVIDIA's or AMD's), Chatterbox and the model your language needs into `~/.codeden/deps/chatterbox`. Nothing else on your computer is used or changed. The first install is about 10 GB.
+- **Language:** read-aloud speaks one language at a time. English uses **Chatterbox Turbo** (fast); every other language uses **Chatterbox Multilingual** (23 languages). Switching to a language whose model isn't there yet offers to install it (about 3 GB).
+- **Voices:** **Annie** is built in. Add your own under **Voices**: a sound file (WAV, MP3, FLAC or OGG) of one person speaking clearly for 6 to 60 seconds. A new voice plays a test sentence straight away and becomes the read-aloud voice; **Test** plays any voice again. Your voices stay on this computer.
+- Chatterbox loads the model the first time it speaks (a few seconds) and unloads it after 10 minutes without speaking, so your graphics card's memory is free again.
+- Chatterbox itself is no longer developed by its makers; CodeDen installs a fixed version (0.1.7).
 - Quiet hours can be set with `voice.readAloud.quietHours` (`{ "start": "22:00", "end": "07:00" }`) in `settings.json`.
 
 ## Image generation

@@ -1,4 +1,4 @@
-import type { Settings } from "@codeden/contracts";
+import { CHATTERBOX_MAX_TEXT, type Settings } from "@codeden/contracts";
 import type { CodeDenClient } from "@/lib/api";
 import { tts } from "./engines";
 import { SpeechQueue } from "./speech-queue";
@@ -36,8 +36,8 @@ export const speechQueue = new SpeechQueue({ stopAudio: cancelSpeech });
 
 /**
  * Speak `text` now with the read-aloud engine from Settings (§11.3): the browser's
- * `speechSynthesis` by default, or ElevenLabs through the server's `/api/tts` proxy (the key
- * never reaches the browser). Replaces anything playing; resolves when playback ends or is
+ * `speechSynthesis` by default, ElevenLabs through the server's `/api/tts` proxy (the key
+ * never reaches the browser), or Chatterbox running on the server in the configured language. Replaces anything playing; resolves when playback ends or is
  * stopped. Finished turns go through `speechQueue` rather than calling this directly.
  * `voice` overrides the configured voice.
  */
@@ -57,11 +57,18 @@ export async function speak(
   const end = () => {
     if (finish === mine) settle();
   };
-  if (ra.engine !== "elevenlabs") {
+  if (ra.engine === "browser") {
     tts.speak(text, { voice, onEnd: end });
     return done;
   }
-  const audio = await client.voice.tts({ text: text.slice(0, 5_000), voiceId: voice ?? undefined });
+  const audio =
+    ra.engine === "chatterbox"
+      ? await client.voice.chatterboxSpeak({
+          text: text.slice(0, CHATTERBOX_MAX_TEXT),
+          language: ra.language,
+          voice: voice ?? undefined,
+        })
+      : await client.voice.tts({ text: text.slice(0, 5_000), voiceId: voice ?? undefined });
   // Stopped (or replaced) while the audio was being fetched.
   if (finish !== mine) return;
   const url = URL.createObjectURL(audio);

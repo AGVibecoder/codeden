@@ -9,6 +9,7 @@ import type {
 import type { CodeDenClient } from "../client";
 import type { AgentConfigApi, ImagesApi, SecretsApi, VoiceApi } from "../feature-apis";
 import { mockBrowserApi } from "./browser";
+import { mockChatterbox } from "./chatterbox";
 import { configContents, configFiles, mcpServers } from "./fixtures/config";
 import { mockHooksApi } from "./hooks";
 import { mockLocalStt } from "./local-stt";
@@ -264,7 +265,13 @@ function mockImages(): ImagesApi {
 
 function mockVoice(): VoiceApi {
   const local = mockLocalStt();
+  const chatterbox = mockChatterbox();
   return {
+    chatterboxStatus: () => delay(chatterbox.status()),
+    installChatterbox: (model) => delay(chatterbox.install(model)),
+    chatterboxSpeak: () => delay(new Blob([], { type: "audio/wav" }), 800),
+    addChatterboxVoice: (name) => delay(chatterbox.addVoice(name)),
+    removeChatterboxVoice: (id) => delay(chatterbox.removeVoice(id)),
     localStatus: () => delay(local.status()),
     downloadLocalModel: (id) => delay(local.download(id)),
     deleteLocalModel: (id) => delay(local.remove(id)),
