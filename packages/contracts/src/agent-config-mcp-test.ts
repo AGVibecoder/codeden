@@ -25,6 +25,12 @@ export const MCP_TEST_MAX_TIMEOUT_MS = 120_000;
  * address, before the test's own timeout begins. Editors can take minutes to open.
  */
 export const MCP_START_WAIT_MS = 180_000;
+/**
+ * In a start command or its arguments: the folder of the project picked on the Agents page, so
+ * one user-level server can open whichever project is picked. A `*` in the last part of a path
+ * then picks the first file that matches, as in `{project}/*.uproject`.
+ */
+export const MCP_START_PROJECT_PLACEHOLDER = "{project}";
 
 /**
  * `POST /api/agent-config/mcp/test`. With `spec`, those (unsaved) values are tested, as from

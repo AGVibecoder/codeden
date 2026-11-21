@@ -50,6 +50,8 @@ export interface McpServerTestOptions {
   stopTree?: (pid: number) => Promise<void>;
   /** Run when an `http` or `sse` server's address doesn't answer; what it starts keeps running. */
   start?: McpStartCommand;
+  /** The folder `{project}` stands for in `start`. */
+  project?: string;
   /** Longest wait for a started server's address (`MCP_START_WAIT_MS` by default). */
   startWaitMs?: number;
   /** Starts and awaits the server behind a URL (`ensureServerStarted` by default). */
@@ -121,6 +123,7 @@ export async function testMcpServer(opts: McpServerTestOptions): Promise<McpServ
         cwd,
         env,
         waitMs: opts.startWaitMs ?? MCP_START_WAIT_MS,
+        project: opts.project,
         spawn: opts.spawn,
       });
     }

@@ -129,7 +129,8 @@ export function McpServerDialog({
       ...target,
       name: nameValid ? name : "unsaved",
       spec,
-      ...(startCommand ? { startCommand } : {}),
+      // With a start command, the project picked above is what `{project}` stands for.
+      ...(startCommand ? { startCommand, ...(projectId ? { projectId } : {}) } : {}),
     });
 
   const preview = async () => {
@@ -299,8 +300,11 @@ export function McpServerDialog({
                   </Field>
                 </div>
                 <p className="text-2xs text-muted-foreground">
-                  A test runs the start command when nothing answers at the URL, then waits for it.
-                  It is kept on this computer only, not in the config file.
+                  A test runs the start command when nothing answers at the URL, then waits for it.{" "}
+                  <code>{"{project}"}</code> stands for the folder of the project picked at the top,
+                  and <code>*</code> in a file name picks the first match, as in{" "}
+                  <code>{"{project}"}\*.uproject</code>. Kept on this computer only, not in the
+                  config file.
                 </p>
               </>
             )}
