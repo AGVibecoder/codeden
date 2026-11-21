@@ -352,4 +352,16 @@ describe("local Whisper service", () => {
     expect(cleanTranscript(" [BLANK_AUDIO] ")).toBe("");
     expect(cleanTranscript("(silence) Run the  tests [Music] again.")).toBe("Run the tests again.");
   });
+
+  it("drops the sentences Whisper makes up for silence, but not real sentences with those words", () => {
+    expect(cleanTranscript("This is the end of the video.")).toBe("");
+    expect(cleanTranscript(" Thanks for watching! ")).toBe("");
+    expect(cleanTranscript("Bedankt voor het kijken.")).toBe("");
+    expect(cleanTranscript("TV Gelderland 2021")).toBe("");
+    expect(cleanTranscript("You")).toBe("");
+    expect(cleanTranscript("Test 1 2 3")).toBe("Test 1 2 3");
+    expect(cleanTranscript("Thank you for watching the build, it passed.")).toBe(
+      "Thank you for watching the build, it passed.",
+    );
+  });
 });
