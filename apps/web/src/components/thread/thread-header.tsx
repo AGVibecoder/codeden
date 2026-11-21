@@ -34,7 +34,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SessionCostChip } from "@/components/usage/session-cost";
-import { CallButton } from "@/components/voice/call-panel";
 import { useClient } from "@/lib/api";
 import { copyWithFeedback } from "@/lib/copy";
 import { forkOriginLabel, isHandoff, isReview } from "@/lib/fork-origin";
@@ -187,7 +186,6 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
-        {session.role === "orchestrator" && <CallButton className="mr-1" />}
         {running && (
           <Button
             size="xs"

@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useSettings } from "@/components/settings/settings-ui";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { createCloudStt } from "@/lib/voice/cloud-stt";
@@ -18,23 +19,37 @@ const PHASE_LABEL = {
   ended: "Call ended",
 } as const;
 
-/** Starts a voice call with the orchestrator (§11.3); shows "In call" while one is on. */
-export function CallButton({ className }: { className?: string }) {
+/**
+ * Starts a voice call with the orchestrator (§11.3), next to the dictation button in its
+ * message box; hangs up while a call is on.
+ */
+export function CallButton() {
   const phase = useCallStore((s) => s.state?.phase);
   const start = useCallStore((s) => s.start);
   const hangUp = useCallStore((s) => s.hangUp);
   const inCall = phase !== undefined && phase !== "ended";
+  const label = inCall ? "Hang up" : "Call the orchestrator; its answers are spoken";
   return (
-    <Button
-      size="xs"
-      variant={inCall ? "default" : "outline"}
-      className={cn("gap-1.5", className)}
-      onClick={() => (inCall ? hangUp() : start())}
-      title={inCall ? "Hang up" : "Talk with the orchestrator; its answers are read aloud"}
-    >
-      {inCall ? <PhoneOff className="size-3" /> : <Phone className="size-3" />}
-      {inCall ? "Hang up" : "Call"}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => (inCall ? hangUp() : start())}
+          aria-label={label}
+          aria-pressed={inCall}
+          className={cn(
+            "text-muted-foreground",
+            inCall &&
+              "bg-status-failed/12 text-status-failed hover:bg-status-failed/20 hover:text-status-failed",
+          )}
+        >
+          {inCall ? <PhoneOff /> : <Phone />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

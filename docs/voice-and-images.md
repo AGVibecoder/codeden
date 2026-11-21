@@ -62,7 +62,7 @@ When an agent's turn completes, CodeDen can read its final message aloud.
 
 Talk with the orchestrator hands-free.
 
-- **Start:** press **Call** in the orchestrator's top bar, or say the wake word (below). A panel at the bottom right shows what's happening: Listening, Sending, Orchestrator is thinking, Speaking.
+- **Start:** press the phone button next to the microphone in the orchestrator's message box, or say the wake word (below). A panel at the bottom right shows what's happening: Listening, Sending, Orchestrator is thinking, Speaking.
 - **Talking:** speak, then pause for about a second; what you said goes to the orchestrator. Its answer is spoken with your read-aloud engine and voice (Chatterbox, ElevenLabs or the browser), then it listens again. Read-aloud doesn't need to be switched on for calls.
 - Messages sent during a call start with a short note asking the orchestrator to answer in a few spoken sentences, without markdown or code.
 - The microphone is off while an answer plays, so it never hears itself. You can't talk over an answer; **Hang up** stops everything.

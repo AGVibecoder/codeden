@@ -13,7 +13,6 @@ import {
 import { MobileNavButton } from "@/components/shell/mobile-nav";
 import { ThreadView } from "@/components/thread/thread-view";
 import { Button } from "@/components/ui/button";
-import { CallButton } from "@/components/voice/call-panel";
 import { useClient } from "@/lib/api";
 import type { OrchestrationRole } from "@/lib/api/feature-apis";
 import { useProject, useSnapshotData } from "@/lib/queries";
@@ -74,6 +73,7 @@ export function StartComposer({
     <ComposerBox
       draftKey={key}
       placeholder={composerPlaceholders[role]}
+      call={role === "orchestrator"}
       onKeyDown={(e) => {
         if (!isSendKey(e)) return;
         e.preventDefault();
@@ -128,7 +128,6 @@ export function RoleChat({
         </h1>
         <span className="text-2xs text-muted-foreground">Not started</span>
         <ReadOnlyBadge className="ml-auto" />
-        {role === "orchestrator" && <CallButton />}
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {empty(roleDraftKey(role, projectId))}
