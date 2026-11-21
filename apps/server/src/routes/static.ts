@@ -19,6 +19,17 @@ export function mountWeb(app: Hono, webDir: string | undefined): void {
     return;
   }
   const index = indexReader(join(webDir, "index.html"));
+  app.use("/*", async (c, next) => {
+    await next();
+    if (c.req.method !== "GET" || c.req.path.startsWith("/api/")) return;
+    // Hashed bundles never change under their name; everything else (index.html above all,
+    // which names the bundles) is checked again on every load, so an update shows at once
+    // instead of the window running the previous version from its cache.
+    c.res.headers.set(
+      "cache-control",
+      c.req.path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    );
+  });
   app.use("/*", serveStatic({ root: webDir }));
   app.get("*", (c) => {
     if (c.req.path.startsWith("/api/")) return c.notFound();
