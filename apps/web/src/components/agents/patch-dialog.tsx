@@ -56,6 +56,7 @@ export function PatchDialog({
   saving,
   confirmLabel = "Save to file",
   note,
+  alsoSaves,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,6 +68,11 @@ export function PatchDialog({
   confirmLabel?: string;
   /** A line above the diff saying what the change means. */
   note?: ReactNode;
+  /**
+   * What saving changes outside the file (such as a server's start command, kept in CodeDen).
+   * When set, saving is offered even if the file itself doesn't change.
+   */
+  alsoSaves?: ReactNode;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -85,6 +91,7 @@ export function PatchDialog({
           </DialogDescription>
         </DialogHeader>
         {note && <p className="text-xs text-muted-foreground">{note}</p>}
+        {alsoSaves && <p className="text-xs">{alsoSaves}</p>}
         <div className="max-h-[55dvh] min-h-24 overflow-auto rounded-lg border border-border bg-background/60 scroll-thin">
           {error ? (
             <p className="p-4 text-xs text-status-failed">{error}</p>
@@ -95,7 +102,7 @@ export function PatchDialog({
           ) : diff.changed ? (
             <PatchView patch={diff.patch} />
           ) : (
-            <p className="p-4 text-xs text-muted-foreground">No changes to write.</p>
+            <p className="p-4 text-xs text-muted-foreground">No changes to this file.</p>
           )}
         </div>
         <DialogFooter className="items-center sm:justify-between">
@@ -109,7 +116,7 @@ export function PatchDialog({
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Keep editing
             </Button>
-            <Button onClick={onConfirm} disabled={saving || !diff?.changed}>
+            <Button onClick={onConfirm} disabled={saving || !diff || (!diff.changed && !alsoSaves)}>
               {saving ? "Saving…" : confirmLabel}
             </Button>
           </div>

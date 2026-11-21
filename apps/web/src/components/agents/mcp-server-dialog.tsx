@@ -109,6 +109,10 @@ export function McpServerDialog({
     previous: editing?.provider === provider ? editing.spec : undefined,
   });
   const startCommand = formToStart(form);
+  // The start command is kept in CodeDen, not the file, so the file's diff doesn't show it.
+  const startChanged =
+    JSON.stringify(startCommand ?? null) !==
+    JSON.stringify((editing?.provider === provider ? editing.startCommand : undefined) ?? null);
   const needsProject = scope !== "user" && !projectId;
   const nameValid = /^[A-Za-z0-9_.-]+$/.test(name);
   const valid = nameValid && mcpFormValid(form) && !needsProject;
@@ -346,6 +350,13 @@ export function McpServerDialog({
         error={diffError}
         onConfirm={() => save.mutate()}
         saving={save.isPending}
+        alsoSaves={
+          startChanged
+            ? startCommand
+              ? "Also saves the start command, in CodeDen's own settings on this computer."
+              : "Also removes the start command from CodeDen's settings."
+            : undefined
+        }
       />
     </>
   );
