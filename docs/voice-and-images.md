@@ -17,7 +17,9 @@ Both directions sit behind swappable engines. The defaults are free and run in y
 | ElevenLabs | An ElevenLabs API key | Scribe transcription |
 | OpenAI | An OpenAI API key (shared with OpenAI Images) | `gpt-4o-mini-transcribe` |
 
-- **Language:** leave it on auto to follow the browser (or, for server engines, to detect the language), or pick one.
+- **Languages:** with none, dictation follows the browser's language (or, for server engines, detects it). Add the languages you speak with **+ Add a language**; the first one is your main language.
+  - **Local (Whisper)** switches between them by itself while you talk, so you can mix English and your mother tongue without changing anything. When it thinks it hears a language that isn't in your list (Dutch taken for German, say), it transcribes that phrase again in your main language. Use a model without "(English)" in its name.
+  - **Browser** listens in the first language only. **ElevenLabs** and **OpenAI** detect the language by themselves when you have more than one.
 - **Text appears as you speak.** The Browser engine shows words as it hears them. Local (Whisper), ElevenLabs and OpenAI show text phrase by phrase: each time you pause briefly, the phrase you just said is transcribed and added. Words still in progress show in muted italics under your message and join it once they're final. A level meter and "Listening…" show that the microphone hears you before any text arrives. Stopping adds the last phrase, and if dictation fails partway, the text already transcribed stays.
 
 Cloud dictation captures the microphone in the browser and sends each phrase to the CodeDen server, which forwards it to the provider with your key. Each piece of audio is sent once, so it costs the same as sending the whole recording. The key never reaches the page.

@@ -1,4 +1,5 @@
 import {
+  dictationLanguageFor,
   READ_ALOUD_FULL_MAX_CHARS,
   type Session,
   type SessionStatus,
@@ -106,7 +107,7 @@ export const useCallStore = create<CallStore>()((set) => ({
     }
     const call = new VoiceCall({
       engine,
-      language: settings.voice.dictation.language,
+      language: dictationLanguageFor(settings.voice.dictation, choice),
       audio: settings.voice.call.audio,
       send: async (text) => {
         await client.orchestration.send(

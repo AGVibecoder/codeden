@@ -1,3 +1,4 @@
+import { dictationLanguageFor } from "@codeden/contracts";
 import { useLocalStt, WhisperModelSelect, WhisperModelStatus } from "./local-whisper";
 import { WhisperTest } from "./local-whisper-test";
 import { SettingRow, useSettings } from "./settings-ui";
@@ -29,7 +30,10 @@ export function LocalWhisperRows() {
         </div>
       </SettingRow>
       <SettingRow label="Try it" help="Say a sentence after pressing Test." stacked>
-        <WhisperTest disabled={model?.state !== "installed"} language={dictation.language} />
+        <WhisperTest
+          disabled={model?.state !== "installed"}
+          language={dictationLanguageFor(dictation, "local")}
+        />
       </SettingRow>
     </>
   );

@@ -1,4 +1,4 @@
-import type { Session, UserInputInit } from "@codeden/contracts";
+import { dictationLanguageFor, type Session, type UserInputInit } from "@codeden/contracts";
 import { Paperclip } from "lucide-react";
 import {
   type ClipboardEvent,
@@ -94,7 +94,10 @@ export function ComposerBox({
   const draft = useComposerStore((s) => getDraft(s, draftKey));
   const focusToken = useComposerStore((s) => s.focusToken);
   const { setText, addAttachments, removeAttachment } = useComposerStore.getState();
-  const dictationLanguage = useSnapshotData((s) => s.settings.voice.dictation.language, null);
+  const dictationLanguage = useSnapshotData(
+    (s) => dictationLanguageFor(s.settings.voice.dictation, s.settings.voice.dictation.engine),
+    null,
+  );
   const dictation = useDictation({
     baseText: draft.text,
     onText: (t) => setText(draftKey, t),

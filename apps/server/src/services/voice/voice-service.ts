@@ -1,4 +1,11 @@
-import type { SttEngine, SttResponse, TtsRequest, VoiceInfo } from "@codeden/contracts";
+import {
+  dictationLanguages,
+  isoLanguage,
+  type SttEngine,
+  type SttResponse,
+  type TtsRequest,
+  type VoiceInfo,
+} from "@codeden/contracts";
 import type { SettingsStore } from "../../settings-store";
 import { ServiceError } from "../errors";
 import type { SecretStore } from "../secrets";
@@ -98,12 +105,19 @@ export class VoiceService {
       (configured.engine === "openai" || configured.engine === "local"
         ? configured.engine
         : "elevenlabs");
-    const language = opts.language ?? configured.language ?? undefined;
+    // A hint only when there is one language; with several the engine detects it.
+    const languages = dictationLanguages(configured);
+    const language =
+      opts.language ?? (languages.length === 1 ? isoLanguage(languages[0]) : null) ?? undefined;
     if (engine === "local") {
       if (!this.deps.local) {
         throw new ServiceError(503, "local_unavailable", "Local Whisper is not available");
       }
-      return this.deps.local.transcribe(audio.bytes, { language, signal: opts.signal });
+      return this.deps.local.transcribe(audio.bytes, {
+        language,
+        languages,
+        signal: opts.signal,
+      });
     }
     const form = new FormData();
     form.append(

@@ -8,7 +8,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { LocalSttStatus, SttResponse, WhisperModelId } from "@codeden/contracts";
+import {
+  isoLanguage,
+  type LocalSttStatus,
+  type SttResponse,
+  type WhisperModelId,
+} from "@codeden/contracts";
 import type { SettingsStore } from "../../../settings-store";
 import { errorMessage, ServiceError } from "../../errors";
 import {
@@ -66,10 +71,6 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
     promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
   });
 }
-
-/** `en-US` -> `en`. */
-const isoLanguage = (language: string | null | undefined) =>
-  language?.split("-")[0]?.toLowerCase() || null;
 
 function fileSize(path: string): number | null {
   try {
@@ -231,7 +232,16 @@ export class LocalSttService {
   /** Transcribe a WAV upload with the model chosen in Settings. */
   async transcribe(
     audio: Uint8Array,
-    opts: { language?: string | null; signal?: AbortSignal } = {},
+    opts: {
+      language?: string | null;
+      /**
+       * Without `language`: the languages you speak, main one first. With several, Whisper
+       * detects the language, and a segment it hears as another language is transcribed again
+       * in the main one.
+       */
+      languages?: string[];
+      signal?: AbortSignal;
+    } = {},
   ): Promise<SttResponse> {
     if (this.problem) throw new ServiceError(409, "unsupported_platform", this.problem);
     const { pcm } = parseWav(audio);
@@ -243,12 +253,29 @@ export class LocalSttService {
         `The ${pin.label} Whisper model isn't downloaded yet. Download it in Settings > Voice.`,
       );
     }
-    const language = pin.englishOnly ? "en" : (isoLanguage(opts.language) ?? "auto");
+    const allowed = [
+      ...new Set((opts.languages ?? []).map(isoLanguage).filter((l): l is string => Boolean(l))),
+    ];
+    const language = pin.englishOnly
+      ? "en"
+      : (isoLanguage(opts.language) ?? (allowed.length === 1 ? allowed[0] : null) ?? "auto");
     return this.serially(async () => {
       const model = await this.model(pin);
       const started = performance.now();
       try {
-        const result = await model.transcribe(pcm, { language, signal: opts.signal });
+        let result = await model.transcribe(pcm, { language, signal: opts.signal });
+        // Heard as a language you don't speak (Dutch taken for German): your main language.
+        const main = allowed[0];
+        if (
+          language === "auto" &&
+          main &&
+          allowed.length > 1 &&
+          result.language &&
+          !allowed.includes(result.language.toLowerCase())
+        ) {
+          result = await model.transcribe(pcm, { language: main, signal: opts.signal });
+          result = { ...result, language: main };
+        }
         return {
           text: cleanTranscript(result.text),
           language: result.language ?? (language === "auto" ? null : language),

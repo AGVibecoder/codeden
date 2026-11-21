@@ -4,6 +4,9 @@ import {
   ChatterboxSpeakRequest,
   ChatterboxStatus,
   chatterboxModelFor,
+  dictationLanguageFor,
+  dictationLanguages,
+  isoLanguage,
   Settings,
 } from "../src";
 
@@ -35,6 +38,21 @@ describe("chatterbox contracts", () => {
       language: "nl",
     });
     expect(ChatterboxSpeakRequest.safeParse({ text: "Hi", language: "xx" }).success).toBe(false);
+  });
+
+  it("reads dictation languages, falling back to the older single language", () => {
+    expect(dictationLanguages({ languages: ["nl-NL", "en-US"], language: "de-DE" })).toEqual([
+      "nl-NL",
+      "en-US",
+    ]);
+    expect(dictationLanguages({ languages: [], language: "de-DE" })).toEqual(["de-DE"]);
+    expect(dictationLanguages({ languages: [], language: null })).toEqual([]);
+    const two = { languages: ["nl-NL", "en-US"] };
+    expect(dictationLanguageFor(two, "browser")).toBe("nl-NL");
+    expect(dictationLanguageFor(two, "local")).toBeNull();
+    expect(dictationLanguageFor({ languages: ["fr-FR"] }, "openai")).toBe("fr-FR");
+    expect(isoLanguage("pt-BR")).toBe("pt");
+    expect(Settings.parse({}).voice.dictation.languages).toEqual([]);
   });
 
   it("defaults the call's wake word to off with Hey Annie", () => {

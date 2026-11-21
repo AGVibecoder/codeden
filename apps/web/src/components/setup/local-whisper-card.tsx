@@ -1,3 +1,4 @@
+import { dictationLanguageFor } from "@codeden/contracts";
 import { Cpu } from "lucide-react";
 import {
   useLocalStt,
@@ -56,7 +57,10 @@ export function LocalWhisperCard({ recommended }: { recommended: boolean }) {
             onChange={(id) => update({ voice: { dictation: { local: { model: id } } } })}
           />
           <WhisperModelStatus status={local.data} modelId={dictation.local.model} />
-          <WhisperTest disabled={model?.state !== "installed"} language={dictation.language} />
+          <WhisperTest
+            disabled={model?.state !== "installed"}
+            language={dictationLanguageFor(dictation, "local")}
+          />
         </div>
       )}
     </div>

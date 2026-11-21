@@ -70,6 +70,38 @@ export const SttResponse = z.object({
 });
 export type SttResponse = z.infer<typeof SttResponse>;
 
+/**
+ * The dictation languages from settings (`voice.dictation`), main one first: `languages`, or
+ * the older single `language` when that list is empty. Empty means auto.
+ */
+export function dictationLanguages(d: {
+  languages?: string[];
+  language?: string | null;
+}): string[] {
+  if (d.languages && d.languages.length > 0) return d.languages;
+  return d.language ? [d.language] : [];
+}
+
+/**
+ * The one language to hand a dictation engine: the browser engine takes the main language;
+ * server engines get it only when there is exactly one (with several, the server decides
+ * from the list in settings). Null is auto.
+ */
+export function dictationLanguageFor(
+  d: { languages?: string[]; language?: string | null },
+  engine: DictationEngine,
+): string | null {
+  const list = dictationLanguages(d);
+  if (engine === "browser") return list[0] ?? null;
+  return list.length === 1 ? (list[0] ?? null) : null;
+}
+
+/** `en-US` -> `en`: the ISO 639-1 code the server engines take. */
+export function isoLanguage(language: string | null | undefined): string | null {
+  const code = language?.split("-")[0]?.toLowerCase();
+  return code && code.length >= 2 ? code : null;
+}
+
 // ---------------------------------------------------------------- local Whisper (§11.3)
 
 /**

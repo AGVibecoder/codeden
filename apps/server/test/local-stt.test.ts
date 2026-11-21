@@ -24,8 +24,14 @@ import { removeTree } from "./support/remove-tree";
 const ADDON = Buffer.from("fake whisper addon bytes");
 const TARBALL = makeTgz({ "package/package.json": Buffer.from("{}"), "package/index.node": ADDON });
 
-/** A fake runtime that records what it loaded and echoes what it heard. */
-function fakeRuntime(calls: string[]): LoadWhisperRuntime {
+/**
+ * A fake runtime that records what it loaded and echoes what it heard. `detected` is the
+ * language it reports on `auto` (none by default).
+ */
+function fakeRuntime(
+  calls: string[],
+  detected: () => string | null = () => null,
+): LoadWhisperRuntime {
   return async (addonPath) => {
     calls.push(`runtime:${readFileSync(addonPath).toString()}`);
     return {
@@ -34,7 +40,10 @@ function fakeRuntime(calls: string[]): LoadWhisperRuntime {
         return {
           async transcribe(pcm, { language }) {
             calls.push(`transcribe:${language}`);
-            return { text: ` [BLANK_AUDIO] heard ${pcm.byteLength} bytes `, language: null };
+            return {
+              text: ` [BLANK_AUDIO] heard ${pcm.byteLength} bytes `,
+              language: language === "auto" ? detected() : null,
+            };
           },
           async release() {
             calls.push("release");
@@ -90,7 +99,14 @@ describe("local Whisper service", () => {
       ...over,
     };
   };
-  const service = (opts: { runtime?: RuntimePin; models?: ModelPin[]; platform?: string } = {}) => {
+  const service = (
+    opts: {
+      runtime?: RuntimePin;
+      models?: ModelPin[];
+      platform?: string;
+      detected?: () => string | null;
+    } = {},
+  ) => {
     const settings = new SettingsStore(join(dir, "settings.json"));
     const svc = new LocalSttService({
       runtimeDir: join(dir, "deps", "whisper"),
@@ -99,7 +115,7 @@ describe("local Whisper service", () => {
       platform: opts.platform ?? "test-x64",
       runtimePins: { "test-x64": opts.runtime ?? runtimePin() },
       models: opts.models ?? [modelPin("base.en"), modelPin("small")],
-      loadRuntime: fakeRuntime(calls),
+      loadRuntime: fakeRuntime(calls, opts.detected),
       idleUnloadMs: 60_000,
     });
     return { svc, settings };
@@ -239,6 +255,33 @@ describe("local Whisper service", () => {
     expect(status.supported).toBe(false);
     expect(status.unsupportedReason).toMatch(/plan9-x64/);
     expect(() => svc.download("base.en")).toThrow(ServiceError);
+  });
+
+  it("picks between your languages, and uses the main one for any other it hears", async () => {
+    let heard = "nl";
+    const { svc, settings } = service({ detected: () => heard });
+    settings.update({ voice: { dictation: { local: { model: "small" } } } });
+    svc.download("small");
+    await svc.settled();
+    const wav = makeWav({ seconds: 1 });
+    const languages = ["nl-NL", "en-US"];
+    expect((await svc.transcribe(wav, { languages })).language).toBe("nl");
+    heard = "en";
+    expect((await svc.transcribe(wav, { languages })).language).toBe("en");
+    heard = "de"; // Dutch taken for German: transcribed again in Dutch, the main language
+    expect((await svc.transcribe(wav, { languages })).language).toBe("nl");
+    // One language is simply forced; an explicit language wins over the list.
+    await svc.transcribe(wav, { languages: ["fr-FR"] });
+    await svc.transcribe(wav, { languages, language: "it" });
+    expect(calls.filter((c) => c.startsWith("transcribe:"))).toEqual([
+      "transcribe:auto",
+      "transcribe:auto",
+      "transcribe:auto",
+      "transcribe:nl",
+      "transcribe:fr",
+      "transcribe:it",
+    ]);
+    await svc.stop();
   });
 
   it("transcribes WAV with the chosen model, forcing English for .en models", async () => {
