@@ -6,6 +6,7 @@
 
 serve, in:  {"id": 7, "op": "speak", "text": "...", "lang": "nl", "voice": "<clip>", "out": "<file.wav>"}
             {"id": 8, "op": "probe", "path": "<clip>"}        (how long a clip is, in seconds)
+            {"id": 9, "op": "load", "lang": "nl"}             (load that language's model ahead of speaking)
        out: "ready" once started, then per request "ok <id> <value>" or "err <id> <message>".
 English is spoken with Chatterbox Turbo, every other language with Chatterbox Multilingual; only one of
 them is kept loaded, so they don't share the graphics card. Other lines on stderr are only for the log.
@@ -215,6 +216,11 @@ def serve():
             continue
         n = req.get("id", 0)
         try:
+            if req.get("op") == "load":  # load the model a language needs, ahead of speaking
+                lang = req.get("lang") or "en"
+                voice.load("turbo" if lang == "en" else "multilingual")
+                print(f"ok {n} loaded", flush=True)
+                continue
             if req.get("op") == "probe":
                 import librosa
                 print(f"ok {n} {librosa.get_duration(path=req['path']):.2f}", flush=True)

@@ -78,7 +78,7 @@ Chatterbox speaks with natural voices on your own computer, and can copy a voice
 - **Install:** pick **Chatterbox (local)** as the read-aloud engine and press **Install**. CodeDen detects your card and installs its own Python, the PyTorch build for that card (NVIDIA's or AMD's), Chatterbox and the model your language needs into `~/.codeden/deps/chatterbox`. Nothing else on your computer is used or changed. The first install is about 10 GB.
 - **Language:** read-aloud speaks one language at a time. English uses **Chatterbox Turbo** (fast); every other language uses **Chatterbox Multilingual** (23 languages). Switching to a language whose model isn't there yet offers to install it (about 3 GB).
 - **Voices:** **Annie** is built in. Add your own under **Voices**: a sound file (WAV, MP3, FLAC or OGG) of one person speaking clearly for 6 to 60 seconds. A new voice plays a test sentence straight away and becomes the read-aloud voice; **Test** plays any voice again. Your voices stay on this computer.
-- Chatterbox loads the model the first time it speaks (a few seconds) and unloads it after 10 minutes without speaking, so your graphics card's memory is free again.
+- Chatterbox loads its model when CodeDen starts with Chatterbox as the read-aloud engine, and right after you install a model, then keeps it loaded, so nothing waits for a load when a message is read. It stays in your graphics card's memory (Multilingual uses about 4.5 GB) until CodeDen closes.
 - Chatterbox itself is no longer developed by its makers; CodeDen installs a fixed version (0.1.7).
 - Quiet hours can be set with `voice.readAloud.quietHours` (`{ "start": "22:00", "end": "07:00" }`) in `settings.json`.
 
