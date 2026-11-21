@@ -103,8 +103,10 @@ export default {
     executableName: "CodeDen",
   },
   nsis: {
-    // Per-user install: no admin prompt, installs to %LOCALAPPDATA%\Programs\CodeDen.
-    oneClick: true,
+    // Per-user install with no admin prompt. The installer asks where to install (the default is
+    // %LOCALAPPDATA%\Programs\CodeDen), so CodeDen can live on another drive.
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
     perMachine: false,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
