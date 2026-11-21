@@ -24,6 +24,7 @@ import {
   useChatterbox,
 } from "./sections-voice-chatterbox";
 import { LocalWhisperRows } from "./sections-voice-local";
+import { WakeWordRows } from "./sections-voice-wake";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
 import { QuietHoursRow, ShortcutRecorder } from "./voice-controls";
 
@@ -178,6 +179,7 @@ export function VoiceSettings() {
             }
           />
         </SettingRow>
+        <WakeWordRows />
         {v.dictation.engine === "openai" && (
           <SettingRow
             label="OpenAI API key"

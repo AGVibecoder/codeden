@@ -73,6 +73,7 @@ export function StartComposer({
     <ComposerBox
       draftKey={key}
       placeholder={composerPlaceholders[role]}
+      call={role === "orchestrator"}
       onKeyDown={(e) => {
         if (!isSendKey(e)) return;
         e.preventDefault();

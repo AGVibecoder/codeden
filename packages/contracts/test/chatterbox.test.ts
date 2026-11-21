@@ -37,6 +37,15 @@ describe("chatterbox contracts", () => {
     expect(ChatterboxSpeakRequest.safeParse({ text: "Hi", language: "xx" }).success).toBe(false);
   });
 
+  it("defaults the call's wake word to off with Hey Annie", () => {
+    expect(Settings.parse({}).voice.call.wakeWord).toEqual({ enabled: false, phrase: "Hey Annie" });
+    expect(Settings.parse({}).voice.call.audio).toBe("speakers");
+    expect(
+      Settings.parse({ voice: { call: { wakeWord: { enabled: true, phrase: "Hey Den" } } } }).voice
+        .call.wakeWord,
+    ).toEqual({ enabled: true, phrase: "Hey Den" });
+  });
+
   it("defaults read-aloud to English and keeps settings without the new fields valid", () => {
     const ra = Settings.parse({ voice: { readAloud: { engine: "browser" } } }).voice.readAloud;
     expect(ra.language).toBe("en");

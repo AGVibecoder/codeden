@@ -207,6 +207,31 @@ export const Settings = z.object({
           quietHours: QuietHours.nullable().default(null),
         })
         .prefault({}),
+      /**
+       * Voice calls with the orchestrator (§11.3): what you say goes to it after a pause, its
+       * answer is spoken with the read-aloud engine, then it listens again.
+       */
+      call: z
+        .object({
+          /**
+           * `headset`: the microphone stays on and talking cuts an answer off. `speakers`: the
+           * microphone pauses while an answer plays, so it never hears the answer, and turns
+           * back on when it ends.
+           */
+          audio: z.enum(["headset", "speakers"]).default("speakers"),
+          /**
+           * Start a call by saying `phrase`, listened for with the dictation engine while
+           * CodeDen is open. Only the browser and local Whisper engines listen for it, so
+           * nothing is sent to a cloud engine while no call is on.
+           */
+          wakeWord: z
+            .object({
+              enabled: z.boolean().default(false),
+              phrase: z.string().trim().min(2).max(60).default("Hey Annie"),
+            })
+            .prefault({}),
+        })
+        .prefault({}),
     })
     .prefault({}),
   /** Image generation for every agent (§12.5). */

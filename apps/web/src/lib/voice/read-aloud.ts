@@ -14,6 +14,7 @@ import { snapshotKey } from "@/lib/queries";
 import { onLiveEvent } from "@/lib/realtime";
 import { type TranscriptState, transcriptFromSnapshot } from "@/lib/transcript/reducer";
 import { finalAssistantText } from "@/lib/transcript/timeline";
+import { callActive } from "@/stores/call";
 import { useVoiceStore } from "@/stores/voice";
 import { speak, speechQueue } from "./speak";
 import { speakerName, withSpeaker } from "./speaker";
@@ -94,6 +95,8 @@ export function startReadAloud(
 
   const readFinished = async (session: Session) => {
     const sessionId = session.id;
+    // During a voice call the call speaks the orchestrator's answers itself.
+    if (session.role === "orchestrator" && callActive()) return;
     if (!allowed(sessionId)) return;
     // The turn that just finished is among the latest few.
     const state = transcriptFromSnapshot(await client.getSessionSnapshot(sessionId, { turns: 3 }));

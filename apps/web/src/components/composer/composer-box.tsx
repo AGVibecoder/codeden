@@ -12,6 +12,7 @@ import {
 } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CallButton } from "@/components/voice/call-panel";
 import { useSnapshotData } from "@/lib/queries";
 import { useComposerBounds } from "@/lib/toast-placement";
 import { cn } from "@/lib/utils";
@@ -62,7 +63,10 @@ export function ComposerBox({
   actions,
   children,
   dictationEngine,
+  call = false,
 }: {
+  /** Offer a voice call with the orchestrator next to dictation (§11.3). */
+  call?: boolean;
   draftKey: string;
   placeholder: string;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -198,6 +202,7 @@ export function ComposerBox({
             <div className="ml-auto flex items-center gap-1">
               {actions}
               <VoiceButton dictation={dictation} />
+              {call && <CallButton />}
               {children}
             </div>
           </div>

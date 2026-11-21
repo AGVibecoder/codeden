@@ -39,7 +39,10 @@ export function Composer({
   sending,
   onSend,
   onStop,
+  call = false,
 }: {
+  /** Offer a voice call next to dictation (the orchestrator only, §11.3). */
+  call?: boolean;
   draftKey: string;
   /** Where `@` and `/` suggestions come from. */
   source: SuggestionSource;
@@ -157,6 +160,7 @@ export function Composer({
         </>
       }
       options={options}
+      call={call}
       actions={
         running &&
         canSteer && (
@@ -256,6 +260,7 @@ export function SessionComposer({
       sending={send.isPending}
       onSend={(input, sendMode) => send.mutate({ sendMode, input })}
       onStop={() => stop.mutate()}
+      call={session.role === "orchestrator"}
     />
   );
 }
