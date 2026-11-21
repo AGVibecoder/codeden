@@ -1,5 +1,6 @@
 // Copies runtime assets next to the bundle, like the CLI build: drizzle migrations,
-// automation templates and the prebuilt web UI, plus the app's tray, badge and window icons.
+// automation templates, the Chatterbox speech script and built-in voice and the prebuilt web
+// UI, plus the app's tray, badge and window icons.
 import { cpSync, existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -7,6 +8,7 @@ const root = resolve(import.meta.dirname, "..");
 const assets = [
   ["../server/drizzle", "dist/drizzle"],
   ["../server/templates", "dist/templates"],
+  ["../server/chatterbox", "dist/chatterbox"],
   ["../web/dist", "dist/web"],
   ["assets", "dist/assets"],
 ];

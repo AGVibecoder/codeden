@@ -446,6 +446,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
       services.updates.stop();
       await searchBackfill.stop();
       await services.localStt.stop();
+      services.chatterbox.close();
       await redetectorStopped;
       stopUpdateEvents();
       stopTerminalEvents();

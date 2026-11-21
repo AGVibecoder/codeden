@@ -17,6 +17,12 @@ import { formatCombo, shortcut } from "@/lib/shortcuts";
 import { browserSttAvailability, resetBrowserSttAvailability, tts } from "@/lib/voice/engines";
 import { speak, speechQueue } from "@/lib/voice/speak";
 import { SecretField, useSecrets } from "./secret-field";
+import {
+  ChatterboxRows,
+  chatterboxReady,
+  sampleFor,
+  useChatterbox,
+} from "./sections-voice-chatterbox";
 import { LocalWhisperRows } from "./sections-voice-local";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
 import { QuietHoursRow, ShortcutRecorder } from "./voice-controls";
@@ -44,15 +50,21 @@ export function VoiceSettings() {
   const secrets = useSecrets();
   const has = (key: string) => secrets.data?.keys.some((k) => k.key === key && k.set) ?? false;
   const cloudTts = v.readAloud.engine === "elevenlabs";
+  const localTts = v.readAloud.engine === "chatterbox";
+  const chatterbox = useChatterbox(localTts);
   const voices = useQuery({
     queryKey: ["eleven-voices", has("elevenlabs.apiKey")],
     queryFn: () => client.voice.voices(),
     enabled: cloudTts && has("elevenlabs.apiKey"),
     retry: false,
   });
-  const voiceOptions = cloudTts
-    ? (voices.data?.voices ?? []).map((vo) => ({ id: vo.id, label: vo.name }))
-    : browserVoices.map((vo) => ({ id: vo.id, label: `${vo.label} (${vo.lang})` }));
+  const voiceOptions = localTts
+    ? (chatterbox.data?.voices ?? [])
+        .filter((vo) => !vo.builtIn)
+        .map((vo) => ({ id: vo.id, label: vo.name }))
+    : cloudTts
+      ? (voices.data?.voices ?? []).map((vo) => ({ id: vo.id, label: vo.name }))
+      : browserVoices.map((vo) => ({ id: vo.id, label: `${vo.label} (${vo.lang})` }));
   const testVoice = useMutation({
     // Plays straight away, ahead of (and stopping) any queued read-aloud.
     mutationFn: async () =>
@@ -62,7 +74,9 @@ export function VoiceSettings() {
           speak(
             client,
             settings,
-            "The checkout flake is fixed and verified with fifty green runs.",
+            localTts
+              ? sampleFor(v.readAloud.language)
+              : "The checkout flake is fixed and verified with fifty green runs.",
           ).catch((e: Error) => {
             toast.error("Couldn't play the voice", { description: e.message });
           }),
@@ -229,9 +243,11 @@ export function VoiceSettings() {
             options={[
               { value: "browser", label: "Browser (free)" },
               { value: "elevenlabs", label: "ElevenLabs" },
+              { value: "chatterbox", label: "Chatterbox (local)" },
             ]}
           />
         </SettingRow>
+        {localTts && <ChatterboxRows />}
         <SettingRow
           label="Voice"
           help={
@@ -254,7 +270,7 @@ export function VoiceSettings() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">
-                  {cloudTts ? "Default voice" : "System default"}
+                  {localTts ? "Annie (built in)" : cloudTts ? "Default voice" : "System default"}
                 </SelectItem>
                 {voiceOptions.slice(0, 60).map((vo) => (
                   <SelectItem key={vo.id} value={vo.id}>
@@ -267,7 +283,11 @@ export function VoiceSettings() {
               size="sm"
               variant="outline"
               disabled={
-                (cloudTts ? !has("elevenlabs.apiKey") : !tts.supported) || testVoice.isPending
+                (localTts
+                  ? !chatterboxReady(chatterbox.data, v.readAloud.language)
+                  : cloudTts
+                    ? !has("elevenlabs.apiKey")
+                    : !tts.supported) || testVoice.isPending
               }
               onClick={() => testVoice.mutate()}
             >

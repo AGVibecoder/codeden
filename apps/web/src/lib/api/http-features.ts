@@ -10,6 +10,7 @@ import {
   BrowserOpenResponse,
   BrowserTabResponse,
   BrowserTabsResponse,
+  ChatterboxStatus,
   DevServersResponse,
   HookListResponse,
   HookWriteResponse,
@@ -159,6 +160,28 @@ export function httpVoiceApi(http: Fetcher): VoiceApi {
     deleteLocalModel: (id) =>
       http.call("DELETE", `/voice/local/models/${enc(id)}`, undefined, (v) =>
         LocalSttStatus.parse(v),
+      ),
+    chatterboxStatus: () => http.get("/voice/chatterbox", (v) => ChatterboxStatus.parse(v)),
+    installChatterbox: (model) =>
+      http.post("/voice/chatterbox/install", { model }, (v) => ChatterboxStatus.parse(v)),
+    async chatterboxSpeak(req) {
+      const res = await http.raw("POST", "/voice/chatterbox/speak", {
+        body: JSON.stringify(req),
+        contentType: "application/json",
+      });
+      return res.blob();
+    },
+    async addChatterboxVoice(name, file) {
+      const form = new FormData();
+      form.set("name", name);
+      form.set("file", file, file.name);
+      // The browser sets the multipart content type with its boundary.
+      const res = await http.raw("POST", "/voice/chatterbox/voices", { body: form });
+      return ChatterboxStatus.parse(await res.json());
+    },
+    removeChatterboxVoice: (id) =>
+      http.call("DELETE", `/voice/chatterbox/voices/${enc(id)}`, undefined, (v) =>
+        ChatterboxStatus.parse(v),
       ),
   };
 }

@@ -18,6 +18,9 @@ import type {
   BrowserTabResponse,
   BrowserTabsResponse,
   BrowserViewportSize,
+  ChatterboxModel,
+  ChatterboxSpeakRequest,
+  ChatterboxStatus,
   DevServersResponse,
   GithubConnection,
   GithubIssueDetails,
@@ -186,6 +189,15 @@ export interface VoiceApi {
   downloadLocalModel(id: WhisperModelId): Promise<LocalSttStatus>;
   /** Cancel a model download or delete the downloaded model. */
   deleteLocalModel(id: WhisperModelId): Promise<LocalSttStatus>;
+  /** Chatterbox: what is installed, the card found and the voices. */
+  chatterboxStatus(): Promise<ChatterboxStatus>;
+  /** Start (or join) installing Chatterbox and a model. */
+  installChatterbox(model: ChatterboxModel): Promise<ChatterboxStatus>;
+  /** Spoken audio (`audio/wav`) from Chatterbox on the server. */
+  chatterboxSpeak(req: ChatterboxSpeakRequest): Promise<Blob>;
+  /** Add a voice from a speech clip. */
+  addChatterboxVoice(name: string, file: File): Promise<ChatterboxStatus>;
+  removeChatterboxVoice(id: string): Promise<ChatterboxStatus>;
 }
 
 export interface SecretsApi {

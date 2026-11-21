@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ChatterboxLanguage } from "./chatterbox";
 import { AutonomyLevel, ProviderId, QuietHours, ReasoningEffort } from "./common";
 import { UpdateMode } from "./updates";
 import { DictationEngine, WhisperModelId } from "./voice-api";
@@ -190,8 +191,11 @@ export const Settings = z.object({
       readAloud: z
         .object({
           enabled: z.boolean().default(false),
-          engine: z.enum(["browser", "elevenlabs"]).default("browser"),
+          /** `chatterbox` runs on this machine once installed (§11.3, `ChatterboxStatus`). */
+          engine: z.enum(["browser", "elevenlabs", "chatterbox"]).default("browser"),
           voice: z.string().nullable().default(null),
+          /** Chatterbox: the one language read aloud; English uses Turbo, others Multilingual. */
+          language: ChatterboxLanguage.default("en"),
           /** What gets read when a turn finishes (§11.3); see `ReadAloudContent`. */
           content: ReadAloudContent.default("summary"),
           /**

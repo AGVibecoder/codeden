@@ -66,6 +66,10 @@ import { type SelfUpdateHost, UpdateService, type Updates } from "./updates/serv
 import { billingFromSetup } from "./usage/billing";
 import { UsageService } from "./usage/usage-service";
 import { ProviderUtilityService, runnerOneShot, type UtilityService } from "./utility";
+import {
+  ChatterboxService,
+  type ChatterboxServiceDeps,
+} from "./voice/chatterbox/chatterbox-service";
 import { LocalSttService, type LocalSttServiceDeps } from "./voice/local/local-stt-service";
 import { VoiceService } from "./voice/voice-service";
 import { WorkbenchService } from "./workbench/workbench-service";
@@ -109,6 +113,8 @@ export interface ServicesOptions {
     LocalSttServiceDeps,
     "fetch" | "platform" | "runtimePins" | "models" | "loadRuntime" | "idleUnloadMs"
   >;
+  /** Chatterbox seams for tests (no real install, card or speech process). */
+  chatterbox?: Omit<ChatterboxServiceDeps, "baseDir" | "log">;
   /** Orchestration seams and timings (§8): GitHub and automation ports, wake debounce. */
   orchestration?: OrchestrationOptions & { github?: GithubPort; automation?: AutomationPort };
   /** GitHub API transport and poll intervals (tests point them at a fake GitHub). */
@@ -173,6 +179,8 @@ export interface AppServices {
   voice: VoiceService;
   /** Local Whisper: runtime and model downloads, and transcription (§11.3). */
   localStt: LocalSttService;
+  /** Chatterbox read aloud, installed on demand (§11.3). */
+  chatterbox: ChatterboxService;
   /** Update checks and one-click self-update (§16; the desktop app's own updater, §17). */
   updates: Updates;
   setup: SetupService;
@@ -360,6 +368,11 @@ export function createServices(opts: ServicesOptions): AppServices {
     ...opts.localStt,
     log: opts.log,
   });
+  const chatterbox = new ChatterboxService({
+    baseDir: join(opts.paths.deps, "chatterbox"),
+    ...opts.chatterbox,
+    log: opts.log,
+  });
   const automations = new AutomationService({
     db: opts.db,
     store: opts.store,
@@ -500,6 +513,7 @@ export function createServices(opts: ServicesOptions): AppServices {
       ...opts.voice,
     }),
     localStt,
+    chatterbox,
     setup,
     claudeSdk,
     usage,

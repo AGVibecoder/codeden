@@ -1,4 +1,9 @@
 import {
+  CHATTERBOX_VOICE_MAX_BYTES,
+  ChatterboxInstallRequest,
+  ChatterboxSpeakRequest,
+  type ChatterboxStatus,
+  ChatterboxVoiceName,
   LocalSttModelParams,
   type LocalSttStatus,
   SttQuery,
@@ -27,8 +32,8 @@ function modelId(raw: string) {
 }
 
 /**
- * `/api/voice/*` (§11.3): the ElevenLabs voice picker, and local Whisper's status, downloads
- * and deletes.
+ * `/api/voice/*` (§11.3): the ElevenLabs voice picker, local Whisper's status, downloads and
+ * deletes, and Chatterbox's install, voices and speech.
  */
 export function voiceRoutes(s: AppServices) {
   return new Hono()
@@ -42,6 +47,40 @@ export function voiceRoutes(s: AppServices) {
     )
     .delete("/local/models/:id", async (c) =>
       c.json<LocalSttStatus>(await s.localStt.remove(modelId(c.req.param("id")))),
+    )
+    .get("/chatterbox", async (c) => c.json<ChatterboxStatus>(await s.chatterbox.status()))
+    .post("/chatterbox/install", jsonBody(ChatterboxInstallRequest), async (c) =>
+      c.json<ChatterboxStatus>(await s.chatterbox.install(c.req.valid("json"))),
+    )
+    .post("/chatterbox/speak", jsonBody(ChatterboxSpeakRequest), async (c) => {
+      const audio = await s.chatterbox.speak(c.req.valid("json"));
+      return new Response(audio, {
+        status: 200,
+        headers: {
+          "content-type": "audio/wav",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+        },
+      });
+    })
+    .post("/chatterbox/voices", async (c) => {
+      const declared = Number(c.req.header("content-length") ?? 0);
+      if (declared > CHATTERBOX_VOICE_MAX_BYTES + 64 * 1024) {
+        throw new ServiceError(413, "voice_too_large", "The voice file is larger than 20 MB");
+      }
+      const form = await c.req.formData();
+      const file = form.get("file");
+      const name = ChatterboxVoiceName.safeParse(form.get("name"));
+      if (!(file instanceof File)) throw badRequest("Expected a `file` field with the voice clip");
+      if (!name.success) throw badRequest("Give the voice a name of up to 100 characters");
+      if (file.size > CHATTERBOX_VOICE_MAX_BYTES) {
+        throw new ServiceError(413, "voice_too_large", "The voice file is larger than 20 MB");
+      }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      return c.json<ChatterboxStatus>(await s.chatterbox.addVoice(name.data, bytes, file.name));
+    })
+    .delete("/chatterbox/voices/:id", async (c) =>
+      c.json<ChatterboxStatus>(await s.chatterbox.removeVoice(c.req.param("id"))),
     );
 }
 
