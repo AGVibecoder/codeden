@@ -10,7 +10,7 @@ Download the installer for your system from the [latest GitHub Release](https://
 
 | System | File | Notes |
 |---|---|---|
-| Windows 10/11 (x64) | `CodeDen-Setup-<version>.exe` | Installs for your user only (no admin prompt) into `%LOCALAPPDATA%\Programs\CodeDen`, with Start menu and desktop shortcuts and an uninstaller (Settings > Apps) |
+| Windows 10/11 (x64) | `CodeDen-Setup-<version>.exe` | Installs for your user only (no admin prompt). It asks where to install, `%LOCALAPPDATA%\Programs\CodeDen` by default, so it can go on another drive. Start menu and desktop shortcuts and an uninstaller (Settings > Apps) |
 | macOS (Apple silicon) | `CodeDen-<version>-arm64.dmg` | Drag CodeDen to Applications |
 | macOS (Intel) | `CodeDen-<version>-x64.dmg` | |
 | Linux (x64) | `CodeDen-<version>-x86_64.AppImage` | `chmod +x` it and run it; it can update itself |
@@ -124,13 +124,13 @@ Notes:
 
 | What | Where |
 |---|---|
-| Your data (database, settings, worktrees, logs) | `~/.codeden` (shared with `npx codeden`; `CODEDEN_HOME` or `--home` to change it) |
+| Your data (database, settings, worktrees, logs, local voice engines) | `~/.codeden` (shared with `npx codeden`; `CODEDEN_HOME` or `--home` to change it). To keep it on another drive on Windows, quit CodeDen, move the folder, and set a user environment variable `CODEDEN_HOME` to the new folder |
 | The app's own profile (window state, cookies, cache) | `~/.codeden/desktop` |
 | Session browser cookies and storage (native views) | In memory only, per session; gone when the session's browser closes or the app quits (after the hand-off) |
 | Downloads from the session browser | Your Downloads folder |
 | App logs | `~/.codeden/logs/desktop.log` and `desktop-server.log` (Help > Show Logs) |
 | Claude Code support (installed on first use) | `~/.codeden/deps` |
-| The app itself | Windows: `%LOCALAPPDATA%\Programs\CodeDen`; macOS: `/Applications/CodeDen.app`; Linux: wherever you keep the AppImage, or `/opt/CodeDen` for the `.deb` |
+| The app itself | Windows: the folder you picked when installing (`%LOCALAPPDATA%\Programs\CodeDen` by default); macOS: `/Applications/CodeDen.app`; Linux: wherever you keep the AppImage, or `/opt/CodeDen` for the `.deb` |
 | Downloaded updates | Windows: `%LOCALAPPDATA%\codeden-updater`; macOS: `~/Library/Caches/codeden-updater`; Linux: `~/.cache/codeden-updater` |
 
 Claude Code support (the Claude Agent SDK) is not part of the app: on first use it is downloaded from the npm registry into `~/.codeden/deps`, checked against its published checksum, without needing npm.
