@@ -27,6 +27,7 @@ import {
   WHISPER_RUNTIME_VERSION,
 } from "./catalog";
 import { downloadVerified, partialPath } from "./download";
+import { isMadeUp } from "./hallucinations";
 import { type LoadWhisperRuntime, loadNativeRuntime, type WhisperModel } from "./runtime";
 import { extractTgzEntry } from "./tgz";
 import { parseWav } from "./wav";
@@ -69,12 +70,17 @@ function atLeastOneSecond(pcm: ArrayBuffer): ArrayBuffer {
   return padded.buffer;
 }
 
-/** Strip Whisper's non-speech markers such as `[BLANK_AUDIO]` or `(silence)`. */
+/**
+ * Strip Whisper's non-speech markers such as `[BLANK_AUDIO]` or `(silence)`, and drop a
+ * transcript that is only a sentence Whisper makes up for silence ("This is the end of the
+ * video.", `isMadeUp`).
+ */
 export function cleanTranscript(text: string): string {
-  return text
+  const cleaned = text
     .replace(/\[[^\]]*\]|\((?:silence|blank[ _]audio|music|inaudible|noise)[^)]*\)/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return isMadeUp(cleaned) ? "" : cleaned;
 }
 
 /** Stop waiting for `promise` when `signal` aborts (the work itself carries on). */
