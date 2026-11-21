@@ -54,6 +54,22 @@ describe("pickGpu", () => {
 });
 
 describe("ChatterboxSpeech", () => {
+  it("keeps running between requests unless told to stop after a while", async () => {
+    let spawned = 0;
+    const spawn = fakeProcess((req) => `ok ${req.id} loaded`);
+    const speech = new ChatterboxSpeech({
+      spawn: () => {
+        spawned++;
+        return spawn();
+      },
+    });
+    await speech.request({ op: "load", lang: "nl" }, 5_000);
+    await new Promise((r) => setTimeout(r, 30));
+    await speech.request({ op: "load", lang: "nl" }, 5_000);
+    expect(spawned).toBe(1);
+    speech.stop();
+  });
+
   it("matches answers to requests and passes errors on", async () => {
     const speech = new ChatterboxSpeech({
       spawn: fakeProcess((req) =>

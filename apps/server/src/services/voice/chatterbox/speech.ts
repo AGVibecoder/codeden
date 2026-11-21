@@ -12,8 +12,8 @@ interface Pending {
 
 /**
  * The long-running Chatterbox process (§11.3): one JSON request per line in, `ok <id> <value>`
- * or `err <id> <message>` out. Started on first use; stopped after `idleMs` without a request so
- * the graphics card's memory is free again, and started again when needed.
+ * or `err <id> <message>` out. Started on first use and kept running with its model loaded, so
+ * speaking never waits for a load; with `idleMs` it stops after that long without a request.
  */
 export class ChatterboxSpeech {
   private child: ChildProcess | null = null;
@@ -25,7 +25,7 @@ export class ChatterboxSpeech {
   constructor(
     private readonly opts: {
       spawn: SpawnSpeech;
-      /** Unload after this long without a request (default 10 minutes). */
+      /** Stop after this long without a request; never when omitted (the model stays loaded). */
       idleMs?: number;
       log?: (message: string) => void;
     },
@@ -65,8 +65,8 @@ export class ChatterboxSpeech {
 
   private armIdle(): void {
     clearTimeout(this.idleTimer);
-    if (this.pending.size > 0) return;
-    this.idleTimer = setTimeout(() => this.stop(), this.opts.idleMs ?? 10 * 60_000);
+    if (this.pending.size > 0 || this.opts.idleMs === undefined) return;
+    this.idleTimer = setTimeout(() => this.stop(), this.opts.idleMs);
     this.idleTimer.unref?.();
   }
 

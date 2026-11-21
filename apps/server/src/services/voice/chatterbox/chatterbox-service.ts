@@ -5,6 +5,7 @@ import {
   CHATTERBOX_VOICE_MAX_SECONDS,
   CHATTERBOX_VOICE_MIN_SECONDS,
   type ChatterboxInstallRequest,
+  type ChatterboxLanguage,
   type ChatterboxModel,
   type ChatterboxPartState,
   type ChatterboxSpeakRequest,
@@ -54,6 +55,8 @@ export interface ChatterboxServiceDeps {
   spawn?: SpawnSpeech;
   fetch?: typeof fetch;
   log?: (message: string) => void;
+  /** The read-aloud language from settings, to load its model ahead of speaking. */
+  language?: () => ChatterboxLanguage;
 }
 
 /** How long one spoken text may take, the first model load included. */
@@ -179,6 +182,8 @@ export class ChatterboxService {
           job.runtime = false;
         }
         if (!this.modelInstalled(req.model)) await installModel(ctx, req.model);
+        // Load it straight away, so the first test or message doesn't wait.
+        void this.warmUp(this.deps.language?.() ?? (req.model === "turbo" ? "en" : "nl"));
       } catch (error) {
         const message = errorMessage(error);
         this.deps.log?.(`chatterbox install: ${message}`);
@@ -192,6 +197,20 @@ export class ChatterboxService {
     })();
     this.job = job;
     return this.status();
+  }
+
+  /**
+   * Load the model `language` needs now, so the first sentence read aloud doesn't wait for it
+   * (it stays loaded). Does nothing when that model isn't installed; never throws.
+   */
+  async warmUp(language: ChatterboxLanguage): Promise<void> {
+    if (!this.runtimeInstalled() || !this.modelInstalled(chatterboxModelFor(language))) return;
+    try {
+      await this.speech.request({ op: "load", lang: language }, SPEAK_TIMEOUT_MS);
+      this.deps.log?.(`chatterbox: ${chatterboxModelFor(language)} model loaded ahead of speaking`);
+    } catch (error) {
+      this.deps.log?.(`chatterbox: couldn't load the model ahead: ${errorMessage(error)}`);
+    }
   }
 
   /** WAV audio of `text`, in the voice and with the model the language needs. */

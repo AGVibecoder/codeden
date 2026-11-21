@@ -370,9 +370,14 @@ export function createServices(opts: ServicesOptions): AppServices {
   });
   const chatterbox = new ChatterboxService({
     baseDir: join(opts.paths.deps, "chatterbox"),
+    language: () => opts.settings.get().voice.readAloud.language,
     ...opts.chatterbox,
     log: opts.log,
   });
+  // Chatterbox reads aloud: load its model now, so the first message doesn't wait for it.
+  if (opts.settings.get().voice.readAloud.engine === "chatterbox" && !opts.chatterbox) {
+    void chatterbox.warmUp(opts.settings.get().voice.readAloud.language);
+  }
   const automations = new AutomationService({
     db: opts.db,
     store: opts.store,
