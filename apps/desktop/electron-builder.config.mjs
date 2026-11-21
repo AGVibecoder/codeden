@@ -90,7 +90,7 @@ export default {
   files: ["**/*", "!**/*.map", "!**/*.d.ts"],
   afterPack: prepareNativeModules,
   protocols: [{ name: "CodeDen", schemes: ["codeden"] }],
-  publish: [{ provider: "github", owner: "leonvanzyl", repo: "codeden", releaseType: "release" }],
+  publish: [{ provider: "github", owner: "Group-AG", repo: "codeden", releaseType: "release" }],
   electronFuses: {
     // The server and runner run on the app's binary as Node.js (ELECTRON_RUN_AS_NODE).
     runAsNode: true,
