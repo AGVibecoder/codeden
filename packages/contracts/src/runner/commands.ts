@@ -372,6 +372,8 @@ export const RunnerCommand = z.discriminatedUnion("name", [
      * `MCP_START_WAIT_MS` for it, then test. What it starts is left running.
      */
     start: McpStartCommand.optional(),
+    /** The folder `MCP_START_PROJECT_PLACEHOLDER` stands for in `start`. */
+    project: z.string().min(1).optional(),
   }),
   /** `fs.*` and `transfer.*` (`docs/remote-runners.md` §10), defined in `./workspace-fs`. */
   ...WorkspaceFsCommands,

@@ -174,8 +174,9 @@ export class AgentConfigService {
         `No MCP server named ${req.name} in ${source.file}`,
       );
     }
-    const cwd =
-      req.scope !== "user" && req.projectId ? this.project(req.projectId).path : undefined;
+    // A user-scope server tested with a project picked: `{project}` in its start command is it.
+    const project = req.projectId ? this.project(req.projectId).path : undefined;
+    const cwd = req.scope !== "user" ? project : undefined;
     const start =
       spec.type === "stdio"
         ? undefined
@@ -191,6 +192,7 @@ export class AgentConfigService {
           stdioEnv: req.provider === "codex" ? "allowlist" : "inherit",
           ...(cwd ? { cwd } : {}),
           ...(start ? { start } : {}),
+          ...(start && project ? { project } : {}),
         },
         MCP_TEST_DEFAULT_TIMEOUT_MS + MCP_TEST_SLACK_MS + (start ? MCP_START_WAIT_MS : 0),
       );

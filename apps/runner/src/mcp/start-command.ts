@@ -1,6 +1,8 @@
 /// <reference path="../types/cross-spawn.d.ts" />
+import { existsSync, readdirSync } from "node:fs";
 import { connect } from "node:net";
-import type { McpStartCommand } from "@codeden/contracts";
+import { basename, dirname, join } from "node:path";
+import { MCP_START_PROJECT_PLACEHOLDER, type McpStartCommand } from "@codeden/contracts";
 import crossSpawn from "cross-spawn";
 import type { SpawnServer } from "./stdio-transport";
 
@@ -17,6 +19,8 @@ export interface EnsureStartedOptions {
   env: Record<string, string>;
   /** Longest wait for the address to answer after the command was started. */
   waitMs: number;
+  /** The folder `{project}` stands for in the command and its arguments. */
+  project?: string;
   /** True when something accepts connections on `host:port` (a TCP connect by default). */
   probe?: (host: string, port: number) => Promise<boolean>;
   /** Starts the command (`cross-spawn` by default; tests pass a fake child process). */
@@ -42,7 +46,7 @@ export async function ensureServerStarted(opts: EnsureStartedOptions): Promise<b
   const port = Number(opts.url.port) || (opts.url.protocol === "https:" ? 443 : 80);
   if (await probe(host, port)) return false;
 
-  await launch(opts);
+  await launch({ ...opts, start: resolveStartCommand(opts.start, opts.project) });
   const deadline = now() + opts.waitMs;
   while (now() < deadline) {
     await sleep(POLL_MS);
@@ -51,6 +55,47 @@ export async function ensureServerStarted(opts: EnsureStartedOptions): Promise<b
   throw new Error(
     `Started "${opts.start.command}", but nothing answered on ${host}:${port} within ${Math.round(opts.waitMs / 1000)} s. It may still be opening: test again in a moment`,
   );
+}
+
+/**
+ * The command as it is run: `{project}` replaced by the project's folder, then a `*` in the
+ * last part of a path replaced by the first file there that matches (by name, ignoring case),
+ * so `{project}/*.uproject` opens the project's own file. Throws when `{project}` is used
+ * without a project, or nothing matches a pattern.
+ */
+export function resolveStartCommand(start: McpStartCommand, project?: string): McpStartCommand {
+  const resolve = (value: string): string => {
+    let text = value;
+    if (text.includes(MCP_START_PROJECT_PLACEHOLDER)) {
+      if (!project) {
+        throw new Error(
+          `The start command uses ${MCP_START_PROJECT_PLACEHOLDER}: pick a project at the top of the Agents page first`,
+        );
+      }
+      text = text.replaceAll(MCP_START_PROJECT_PLACEHOLDER, project);
+    }
+    const name = basename(text);
+    if (!name.includes("*")) return text;
+    const dir = dirname(text);
+    const pattern = new RegExp(
+      `^${name
+        .split("*")
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+        .join(".*")}$`,
+      "i",
+    );
+    const found = existsSync(dir)
+      ? readdirSync(dir)
+          .filter((entry) => pattern.test(entry))
+          .sort()[0]
+      : undefined;
+    if (!found) throw new Error(`Start command: nothing matches ${text}`);
+    return join(dir, found);
+  };
+  return {
+    command: resolve(start.command),
+    ...(start.args ? { args: start.args.map(resolve) } : {}),
+  };
 }
 
 /** Start the command on its own: no pipes, not tied to the runner, its window shown. */

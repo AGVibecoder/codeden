@@ -86,7 +86,11 @@ export function McpServers({ projectId }: { projectId: string | null }) {
             // A saved edit starts the row afresh, so no test result outlives its definition.
             key={`${entryKey(s)}:${JSON.stringify(s.spec)}`}
             server={s}
-            testTarget={target(s)}
+            testTarget={{
+              ...target(s),
+              // A user-level start command can use `{project}`: the project picked above.
+              ...(s.startCommand && !s.projectId && projectId ? { projectId } : {}),
+            }}
             onEdit={() => setDialog({ editing: s })}
             onRemove={() => void askRemove(s)}
           />
