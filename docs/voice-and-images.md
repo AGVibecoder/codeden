@@ -58,6 +58,17 @@ When an agent's turn completes, CodeDen can read its final message aloud.
 - **Mute one session** from its **Details** tab.
 - **Engines:** the browser's built-in voices (default, free), ElevenLabs (pick a voice from your account), or **Chatterbox**, which runs on your own graphics card (below).
 
+### Voice calls with the orchestrator
+
+Talk with the orchestrator hands-free.
+
+- **Start:** press **Call** in the orchestrator's top bar, or say the wake word (below). A panel at the bottom right shows what's happening: Listening, Sending, Orchestrator is thinking, Speaking.
+- **Talking:** speak, then pause for about a second; what you said goes to the orchestrator. Its answer is spoken with your read-aloud engine and voice (Chatterbox, ElevenLabs or the browser), then it listens again. Read-aloud doesn't need to be switched on for calls.
+- Messages sent during a call start with a short note asking the orchestrator to answer in a few spoken sentences, without markdown or code.
+- The microphone is off while an answer plays, so it never hears itself. You can't talk over an answer; **Hang up** stops everything.
+- Listening uses your dictation engine. With a cloud engine (ElevenLabs, OpenAI), what you say in a call is sent to that service.
+- **Wake word:** Settings → Voice → Dictation → **Wake word** listens for a phrase ("Hey Annie" by default) while CodeDen is open, and starts a call when it hears it. Words said right after it are your first message. It only works with the Browser and Local (Whisper) engines, so nothing goes to a cloud service while you aren't in a call.
+
 ### Chatterbox (local read-aloud)
 
 Chatterbox speaks with natural voices on your own computer, and can copy a voice from a short clip. It needs Windows and an NVIDIA or AMD Radeon graphics card, for now.

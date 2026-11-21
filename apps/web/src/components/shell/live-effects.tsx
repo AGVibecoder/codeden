@@ -15,6 +15,7 @@ import { platform } from "@/lib/platform";
 import { snapshotKey, useSnapshot } from "@/lib/queries";
 import { onLiveEvent } from "@/lib/realtime";
 import { startReadAloud } from "@/lib/voice/read-aloud";
+import { initCalls } from "@/stores/call";
 import { useAttention } from "./use-attention";
 
 const blockingVerb: Partial<Record<InboxItem["kind"], string>> = {
@@ -82,6 +83,8 @@ export function LiveEffects() {
 
   // Read the final message aloud when any session's turn completes (§11.3).
   useEffect(() => startReadAloud(client, queryClient), [client, queryClient]);
+  // Voice calls with the orchestrator use the same client and cache (§11.3).
+  useEffect(() => initCalls(client, queryClient), [client, queryClient]);
 
   return null;
 }

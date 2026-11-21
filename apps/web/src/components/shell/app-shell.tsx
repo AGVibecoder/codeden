@@ -5,6 +5,7 @@ import { AddProjectDialog } from "@/components/setup/add-project-dialog";
 import { HandoffDialog } from "@/components/thread/handoff-dialog";
 import { ReviewDialog } from "@/components/thread/review-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { CallPanel, WakeWord } from "@/components/voice/call-panel";
 import { RightPanel } from "@/components/workbench/right-panel";
 import { TerminalDrawer } from "@/components/workbench/terminal-drawer";
 import { useSession, useSnapshot } from "@/lib/queries";
@@ -139,6 +140,8 @@ export function AppShell() {
       <ReviewDialog />
       <ShortcutsDialog />
       <LiveEffects />
+      <CallPanel />
+      <WakeWord />
     </div>
   );
 }
