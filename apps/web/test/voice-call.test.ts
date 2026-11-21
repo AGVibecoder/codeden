@@ -1,6 +1,8 @@
+import type { Session } from "@codeden/contracts";
 import { describe, expect, it } from "vitest";
 import { type CallState, matchWakeWord, realWords, VoiceCall } from "../src/lib/voice/call";
 import type { DictationText, SpeechToText } from "../src/lib/voice/engines";
+import { isTargetSession, sameTarget } from "../src/stores/call";
 
 /** A dictation engine the test drives by hand. */
 function fakeEngine() {
@@ -209,6 +211,29 @@ describe("VoiceCall", () => {
     call.start();
     expect(call.phase).toBe("ended");
     expect((last as CallState | null)?.error).toBe("Microphone blocked");
+  });
+});
+
+describe("call targets", () => {
+  const orchestrator = { role: "orchestrator" as const, projectId: null };
+  const pmA = { role: "pm" as const, projectId: "p-a" };
+  const pmB = { role: "pm" as const, projectId: "p-b" };
+  const session = (role: string, projectId: string | null) =>
+    ({ role, projectId }) as unknown as Session;
+
+  it("tells calls with the orchestrator and each project manager apart", () => {
+    expect(sameTarget(orchestrator, { role: "orchestrator", projectId: "ignored" })).toBe(true);
+    expect(sameTarget(pmA, pmA)).toBe(true);
+    expect(sameTarget(pmA, pmB)).toBe(false);
+    expect(sameTarget(orchestrator, pmA)).toBe(false);
+    expect(sameTarget(null, pmA)).toBe(false);
+  });
+
+  it("matches the role session a call talks to", () => {
+    expect(isTargetSession(pmA, session("pm", "p-a"))).toBe(true);
+    expect(isTargetSession(pmA, session("pm", "p-b"))).toBe(false);
+    expect(isTargetSession(pmA, session("agent", "p-a"))).toBe(false);
+    expect(isTargetSession(orchestrator, session("orchestrator", null))).toBe(true);
   });
 });
 

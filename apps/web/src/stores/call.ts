@@ -9,6 +9,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import type { CodeDenClient } from "@/lib/api";
+import type { OrchestrationRole } from "@/lib/api/feature-apis";
 import { snapshotKey } from "@/lib/queries";
 import { onLiveEvent } from "@/lib/realtime";
 import { transcriptFromSnapshot } from "@/lib/transcript/reducer";
@@ -27,28 +28,55 @@ import { stripForSpeech } from "@/lib/voice/speech-text";
 export const CALL_HINT =
   "(Voice call: answer in one to three short spoken sentences, without markdown, lists or code.)";
 
+/** Who a call is with: the orchestrator, or a project's project manager. */
+export interface CallTarget {
+  role: OrchestrationRole;
+  /** The project, for a project manager. */
+  projectId: string | null;
+}
+
+export const sameTarget = (a: CallTarget | null, b: CallTarget | null) =>
+  Boolean(
+    a && b && a.role === b.role && (a.role === "orchestrator" || a.projectId === b.projectId),
+  );
+
+/** True when `session` is the role session a call with `target` talks to. */
+export const isTargetSession = (target: CallTarget, session: Session) =>
+  session.role === target.role &&
+  (target.role === "orchestrator" || session.projectId === target.projectId);
+
 interface CallStore {
   /** The call in progress, or the last one's final state; null before any call. */
   state: CallState | null;
+  /** Who the call in progress (or the last one) is with. */
+  target: CallTarget | null;
   /** Microphone level while listening (0..1). */
   level: number | null;
-  start: (first?: string) => void;
+  /** Start a call; does nothing while another call is on (only one runs at a time). */
+  start: (target: CallTarget, first?: string) => void;
   hangUp: () => void;
 }
 
 let current: VoiceCall | null = null;
 let deps: { client: CodeDenClient; queryClient: QueryClient } | null = null;
 
-/** True while a call is on (read-aloud then leaves the orchestrator's answers to the call). */
+/** True while a call is on. */
 export const callActive = () => (current ? current.phase !== "ended" : false);
 
+/** True while a call with the session's role is on (read-aloud then leaves its answers to the call). */
+export const inCallWith = (session: Session) => {
+  const target = useCallStore.getState().target;
+  return callActive() && target !== null && isTargetSession(target, session);
+};
+
 /**
- * Calls `onReply` with the final message of every orchestrator turn that finishes from now
- * on; returns a stop.
+ * Calls `onReply` with the final message of every turn of the target's role session that
+ * finishes from now on; returns a stop.
  */
-function watchOrchestrator(
+function watchTarget(
   client: CodeDenClient,
   queryClient: QueryClient,
+  target: CallTarget,
   onReply: (markdown: string) => void,
 ): () => void {
   const statuses = new Map<string, SessionStatus>();
@@ -72,7 +100,7 @@ function watchOrchestrator(
     const session = env.payload.session;
     const prev = statuses.get(session.id);
     statuses.set(session.id, session.status);
-    if (session.role === "orchestrator" && turnJustFinished(prev, session.status)) {
+    if (isTargetSession(target, session) && turnJustFinished(prev, session.status)) {
       finished(session);
     }
   });
@@ -82,11 +110,15 @@ function watchOrchestrator(
   };
 }
 
-/** Voice calls with the orchestrator (§11.3): one call at a time, kept across pages. */
+/**
+ * Voice calls with the orchestrator or a project manager (§11.3): one call at a time, kept
+ * across pages.
+ */
 export const useCallStore = create<CallStore>()((set) => ({
   state: null,
+  target: null,
   level: null,
-  start(first) {
+  start(target, first) {
     if (!deps || callActive()) return;
     const { client, queryClient } = deps;
     const settings = queryClient.getQueryData<Snapshot>(snapshotKey)?.settings;
@@ -95,6 +127,7 @@ export const useCallStore = create<CallStore>()((set) => ({
     const engine = choice === "browser" ? browserStt : createCloudStt(client, choice);
     if (!engine.supported) {
       set({
+        target,
         state: {
           phase: "ended",
           heard: "",
@@ -105,19 +138,20 @@ export const useCallStore = create<CallStore>()((set) => ({
       });
       return;
     }
+    set({ target, level: null });
     const call = new VoiceCall({
       engine,
       language: dictationLanguageFor(settings.voice.dictation, choice),
       audio: settings.voice.call.audio,
       send: async (text) => {
         await client.orchestration.send(
-          "orchestrator",
-          null,
+          target.role,
+          target.role === "pm" ? target.projectId : null,
           { text: `${CALL_HINT}\n\n${text}` },
           "queue",
         );
       },
-      watchReplies: (onReply) => watchOrchestrator(client, queryClient, onReply),
+      watchReplies: (onReply) => watchTarget(client, queryClient, target, onReply),
       speak: async (markdown, signal) => {
         const now = queryClient.getQueryData<Snapshot>(snapshotKey)?.settings ?? settings;
         const words = speechExcerpt(stripForSpeech(markdown), READ_ALOUD_FULL_MAX_CHARS);

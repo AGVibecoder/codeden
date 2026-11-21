@@ -9,6 +9,7 @@ import { useSnapshotData } from "@/lib/queries";
 import { sendToSession } from "@/lib/send-to-session";
 import { matchesCombo, shortcut } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
+import type { CallTarget } from "@/stores/call";
 import { getDraft, useComposerStore } from "@/stores/composer";
 import {
   ComposerBox,
@@ -39,10 +40,10 @@ export function Composer({
   sending,
   onSend,
   onStop,
-  call = false,
+  call = null,
 }: {
-  /** Offer a voice call next to dictation (the orchestrator only, §11.3). */
-  call?: boolean;
+  /** Offer a voice call with this orchestrator or project manager next to dictation (§11.3). */
+  call?: CallTarget | null;
   draftKey: string;
   /** Where `@` and `/` suggestions come from. */
   source: SuggestionSource;
@@ -260,7 +261,11 @@ export function SessionComposer({
       sending={send.isPending}
       onSend={(input, sendMode) => send.mutate({ sendMode, input })}
       onStop={() => stop.mutate()}
-      call={session.role === "orchestrator"}
+      call={
+        session.role === "orchestrator" || session.role === "pm"
+          ? { role: session.role, projectId: session.projectId }
+          : null
+      }
     />
   );
 }

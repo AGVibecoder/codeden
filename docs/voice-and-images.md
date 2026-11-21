@@ -56,11 +56,12 @@ When an agent's turn completes, CodeDen can read its final message aloud.
 - **Mute one session** from its **Details** tab.
 - **Engines:** the browser's built-in voices (default, free), ElevenLabs (pick a voice from your account), or **Chatterbox**, which runs on your own graphics card (below).
 
-### Voice calls with the orchestrator
+### Voice calls with the orchestrator or a project manager
 
-Talk with the orchestrator hands-free.
+Talk with the orchestrator, or a project's project manager, hands-free.
 
-- **Start:** press the phone button next to the microphone in the orchestrator's message box, or say the wake word (below). A panel at the bottom right shows what's happening (Listening, Working on it, Speaking) and the microphone level.
+- **Start:** press the phone button next to the microphone in their message box, or say the wake word (below), which always calls the orchestrator.
+- **One call at a time:** while a call is on, the phone button elsewhere is greyed out ("hang up there first"). A panel at the bottom right shows what's happening (Listening, Working on it, Speaking) and the microphone level.
 - **Talking:** the microphone stays on for the whole call. Each time you pause for about a second, what you said since the last pause goes to the orchestrator straight away, even while it is still working or speaking (it queues behind a running turn). Every answer it finishes is spoken with your read-aloud engine and voice (Chatterbox, ElevenLabs or the browser). Read-aloud doesn't need to be switched on for calls.
 - **Headset or speakers** (Settings → Voice → Dictation → **Calls**):
   - **Headset:** the microphone stays on during answers. As soon as a real word is heard the answer stops; coughs, sneezes, "uh" and "hmm" don't count and aren't sent.
