@@ -47,6 +47,10 @@ export function chatterboxEnv(paths: ChatterboxPaths): Record<string, string> {
     PKUSEG_HOME: join(paths.cache, "pkuseg"),
     UV_CACHE_DIR: uvCache(paths),
     UV_PYTHON_INSTALL_DIR: paths.pythonDir,
+    // PyTorch for AMD is one file of several GB from AMD's server, which can stall for longer
+    // than uv's default 30 s; wait longer and try again before giving up.
+    UV_HTTP_TIMEOUT: "600",
+    UV_HTTP_RETRIES: "5",
     // AMD's MIOpen otherwise searches for the fastest method again for every new sound length.
     MIOPEN_FIND_MODE: "FAST",
     MIOPEN_USER_DB_PATH: join(paths.cache, "miopen"),
@@ -168,8 +172,9 @@ export async function installRuntime(ctx: InstallContext, gpu: ChatterboxGpu): P
     paths.runtimeMarker,
     `${JSON.stringify({ gpu, check, at: new Date().toISOString() }, null, 2)}\n`,
   );
-  // uv keeps a second copy of every package it downloaded (about 6 GB with PyTorch). Once the
-  // install works it is never needed again; a failed install keeps it, so a retry goes faster.
+  // uv's cache: mostly the installed files themselves under a second name (hard links, no
+  // extra space), plus downloads it keeps only there (about 0.1 GB). Once the install works it
+  // is never needed again; a failed install keeps it, so a retry goes faster.
   ctx.report("Cleaning up downloads", null);
   try {
     rmSync(uvCache(paths), { recursive: true, force: true, maxRetries: 3 });

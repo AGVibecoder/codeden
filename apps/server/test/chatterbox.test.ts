@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ServiceError } from "../src/services/errors";
 import { ChatterboxService } from "../src/services/voice/chatterbox/chatterbox-service";
 import { pickGpu } from "../src/services/voice/chatterbox/gpu";
-import { chatterboxPaths, type RunProgram } from "../src/services/voice/chatterbox/install";
+import {
+  chatterboxEnv,
+  chatterboxPaths,
+  type RunProgram,
+} from "../src/services/voice/chatterbox/install";
 import { ChatterboxSpeech } from "../src/services/voice/chatterbox/speech";
 import { removeTree } from "./support/remove-tree";
 
@@ -131,6 +135,12 @@ describe("ChatterboxService", () => {
     // uv's copy of the downloads is gone once the install works.
     expect(existsSync(cache)).toBe(false);
     expect((await svc.status()).models.turbo).toBe("missing");
+  });
+
+  it("gives slow downloads time instead of uv's 30 s default", () => {
+    const env = chatterboxEnv(chatterboxPaths(join(dir, "chatterbox")));
+    expect(Number(env.UV_HTTP_TIMEOUT)).toBeGreaterThanOrEqual(300);
+    expect(Number(env.UV_HTTP_RETRIES)).toBeGreaterThan(0);
   });
 
   it("installs NVIDIA's PyTorch for an NVIDIA card", async () => {
