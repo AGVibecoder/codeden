@@ -1,6 +1,7 @@
 import { dictationLanguageFor } from "@codeden/contracts";
 import { Cpu } from "lucide-react";
 import {
+  offeredModel,
   useLocalStt,
   useLocalSttActions,
   WhisperModelSelect,
@@ -21,7 +22,7 @@ export function LocalWhisperCard({ recommended }: { recommended: boolean }) {
   const actions = useLocalSttActions();
   const dictation = settings.voice.dictation;
   const using = dictation.engine === "local";
-  const model = local.data?.models.find((m) => m.id === dictation.local.model);
+  const model = offeredModel(local.data, dictation.local.model);
   const supported = local.data?.supported ?? true;
   return (
     <div className="px-4 py-3.5" data-testid="local-whisper-card">

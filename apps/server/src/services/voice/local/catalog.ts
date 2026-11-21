@@ -25,6 +25,8 @@ export interface PinnedFile {
 export interface RuntimePin extends PinnedFile {
   version: string;
   entry: string;
+  /** A graphics card build (`vulkan`); none for the processor build. */
+  variant?: "vulkan";
 }
 
 export interface ModelPin extends PinnedFile {
@@ -81,60 +83,42 @@ export const RUNTIME_PINS: Record<string, RuntimePin> = {
   ),
 };
 
+/**
+ * Graphics card builds by platform: whisper.cpp with Vulkan, which runs on NVIDIA, AMD Radeon
+ * and other cards through the normal graphics driver. Used when a supported card is found;
+ * the processor build above is the fallback.
+ */
+export const GPU_RUNTIME_PINS: Record<string, RuntimePin> = {
+  "win32-x64": {
+    version: WHISPER_RUNTIME_VERSION,
+    url: `https://registry.npmjs.org/@fugood/node-whisper-win32-x64-vulkan/-/node-whisper-win32-x64-vulkan-${WHISPER_RUNTIME_VERSION}.tgz`,
+    sha256: "9ade1c7a94555693ec4de553aca29c47c99965eebe44924a317f509b30e37562",
+    bytes: 12_950_211,
+    entry: "package/index.node",
+    variant: "vulkan",
+  },
+};
+
 /** Hugging Face revision of `ggerganov/whisper.cpp` the checksums below belong to. */
 const MODEL_REVISION = "5359861c739e955e79d9a303bcbc70fb988958b1";
 
-const model = (
-  id: WhisperModelId,
-  sha256: string,
-  bytes: number,
-  info: Pick<ModelPin, "label" | "hint" | "recommended">,
-): ModelPin => {
-  const file = `ggml-${id}-q5_1.bin`;
-  return {
-    id,
-    file,
-    url: `https://huggingface.co/ggerganov/whisper.cpp/resolve/${MODEL_REVISION}/${file}`,
-    sha256,
-    bytes,
-    englishOnly: id.endsWith(".en"),
-    ...info,
-  };
-};
-
-/** The models offered in Settings, smallest first. */
+/**
+ * The model offered: large-v3-turbo, 5-bit quantised (`q5_0`). The smaller models (tiny, base,
+ * small) mistook Dutch for English and made up sentences far too often to be worth offering.
+ * Older settings that name one of them use this one.
+ */
 export const MODEL_PINS: ModelPin[] = [
-  model("tiny.en", "c77c5766f1cef09b6b7d47f21b546cbddd4157886b3b5d6d4f709e91e66c7c2b", 32_166_155, {
-    label: "Tiny (English)",
-    hint: "Fastest, lower accuracy",
-    recommended: false,
-  }),
-  model("tiny", "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7", 32_152_673, {
-    label: "Tiny",
-    hint: "Fastest, lower accuracy, many languages",
-    recommended: false,
-  }),
-  model("base.en", "4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f", 59_721_011, {
-    label: "Base (English)",
-    hint: "Fast, good accuracy",
+  {
+    id: "large-v3-turbo",
+    file: "ggml-large-v3-turbo-q5_0.bin",
+    url: `https://huggingface.co/ggerganov/whisper.cpp/resolve/${MODEL_REVISION}/ggml-large-v3-turbo-q5_0.bin`,
+    sha256: "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+    bytes: 574_041_195,
+    englishOnly: false,
+    label: "Large v3 Turbo",
+    hint: "Accurate in many languages; fast on a graphics card",
     recommended: true,
-  }),
-  model("base", "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898", 59_707_625, {
-    label: "Base",
-    hint: "Fast, good accuracy, many languages",
-    recommended: false,
-  }),
-  model(
-    "small.en",
-    "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
-    190_098_681,
-    { label: "Small (English)", hint: "Slower, best accuracy", recommended: false },
-  ),
-  model("small", "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb", 190_085_487, {
-    label: "Small",
-    hint: "Slower, best accuracy, many languages",
-    recommended: false,
-  }),
+  },
 ];
 
 /** `win32-x64` style key for the current process. */

@@ -12,7 +12,7 @@ import {
   chatterboxModelFor,
 } from "@codeden/contracts";
 import { badRequest, conflict, errorMessage } from "../../errors";
-import { type GpuInfo, pickGpu, windowsAdapterNames } from "./gpu";
+import { type GpuInfo, pickGpu, windowsAdapterNames } from "../gpu";
 import {
   type ChatterboxPaths,
   chatterboxEnv,

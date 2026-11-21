@@ -6,7 +6,7 @@ import type { WhisperModelId } from "@codeden/contracts";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { ServiceError } from "../src/services/errors";
 import type { ModelPin, RuntimePin } from "../src/services/voice/local/catalog";
-import { MODEL_PINS, RUNTIME_PINS } from "../src/services/voice/local/catalog";
+import { GPU_RUNTIME_PINS, MODEL_PINS, RUNTIME_PINS } from "../src/services/voice/local/catalog";
 import { cleanTranscript, LocalSttService } from "../src/services/voice/local/local-stt-service";
 import type { LoadWhisperRuntime } from "../src/services/voice/local/runtime";
 import { extractTgzEntry } from "../src/services/voice/local/tgz";
@@ -130,19 +130,76 @@ describe("local Whisper service", () => {
       "win32-arm64",
       "win32-x64",
     ]);
-    for (const pin of [...Object.values(RUNTIME_PINS), ...MODEL_PINS]) {
+    const runtimes = [...Object.values(RUNTIME_PINS), ...Object.values(GPU_RUNTIME_PINS)];
+    for (const pin of [...runtimes, ...MODEL_PINS]) {
       expect(pin.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(pin.url).toMatch(/^https:\/\/(registry\.npmjs\.org|huggingface\.co)\//);
     }
-    expect(MODEL_PINS.map((m) => m.id)).toEqual([
-      "tiny.en",
-      "tiny",
-      "base.en",
-      "base",
-      "small.en",
-      "small",
-    ]);
-    expect(MODEL_PINS.filter((m) => m.recommended).map((m) => m.id)).toEqual(["base.en"]);
+    expect(GPU_RUNTIME_PINS["win32-x64"]?.variant).toBe("vulkan");
+    // Only large-v3-turbo is offered.
+    expect(MODEL_PINS.map((m) => m.id)).toEqual(["large-v3-turbo"]);
+  });
+
+  it("runs on the graphics card build when a card is found, and falls back to the processor", async () => {
+    const vulkan = Buffer.from("fake vulkan addon bytes");
+    const vulkanTgz = makeTgz({ "package/index.node": vulkan });
+    fake.files.set("/vulkan.tgz", { body: vulkanTgz });
+    const gpuPin = runtimePin({
+      url: `${fake.url}/vulkan.tgz`,
+      sha256: sha256(vulkanTgz),
+      bytes: vulkanTgz.length,
+      variant: "vulkan",
+    });
+    let gpuWorks = true;
+    const settings = new SettingsStore(join(dir, "settings.json"));
+    settings.update({ voice: { dictation: { local: { model: "small" } } } });
+    const loaded: string[] = [];
+    const svc = new LocalSttService({
+      runtimeDir: join(dir, "deps", "whisper"),
+      modelsDir: join(dir, "models", "whisper"),
+      settings,
+      platform: "test-x64",
+      runtimePins: { "test-x64": runtimePin() },
+      gpuRuntimePins: { "test-x64": gpuPin },
+      detectGpu: async () => ({ gpu: "amd", name: "AMD Radeon RX 7900 XTX" }),
+      models: [modelPin("small")],
+      loadRuntime: async (addonPath) => {
+        const bytes = readFileSync(addonPath).toString();
+        loaded.push(bytes);
+        if (bytes === vulkan.toString() && !gpuWorks) throw new Error("no Vulkan driver");
+        return fakeRuntime([])(addonPath);
+      },
+      idleUnloadMs: 60_000,
+    });
+    // An older setting naming a model no longer offered uses the one offered.
+    svc.download("base.en");
+    await svc.settled();
+    expect(svc.status().runtime).toMatchObject({
+      accelerator: "gpu",
+      device: "AMD Radeon RX 7900 XTX",
+      state: "installed",
+    });
+    const wav = makeWav({ seconds: 1 });
+    await svc.transcribe(wav);
+    expect(loaded).toEqual([vulkan.toString()]);
+
+    // A card without a working Vulkan driver: the processor build is fetched and used.
+    await svc.stop();
+    gpuWorks = false;
+    await svc.transcribe(wav);
+    expect(loaded.slice(1)).toEqual([vulkan.toString(), "fake whisper addon bytes"]);
+    expect(svc.status().runtime.accelerator).toBe("cpu");
+    await svc.stop();
+  });
+
+  it("pads a phrase shorter than a second with silence", async () => {
+    const { svc, settings } = service();
+    settings.update({ voice: { dictation: { local: { model: "small" } } } });
+    svc.download("small");
+    await svc.settled();
+    const res = await svc.transcribe(makeWav({ seconds: 0.25 }));
+    expect(res.text).toBe("heard 32000 bytes");
+    await svc.stop();
   });
 
   it("downloads the runtime and a model, verified, with progress", async () => {

@@ -112,10 +112,18 @@ export const DictationEngine = z.enum(["browser", "elevenlabs", "openai", "local
 export type DictationEngine = z.infer<typeof DictationEngine>;
 
 /**
- * Local Whisper models CodeDen can download. `.en` models are English-only (more accurate
- * for English at the same size); the others detect or take a language.
+ * Local Whisper models. CodeDen downloads only `large-v3-turbo`; the smaller ones are kept so
+ * older settings still parse, and a setting naming one of them uses `large-v3-turbo`.
  */
-export const WhisperModelId = z.enum(["tiny", "tiny.en", "base", "base.en", "small", "small.en"]);
+export const WhisperModelId = z.enum([
+  "large-v3-turbo",
+  "tiny",
+  "tiny.en",
+  "base",
+  "base.en",
+  "small",
+  "small.en",
+]);
 export type WhisperModelId = z.infer<typeof WhisperModelId>;
 
 /** Audio format the local engine accepts: WAV, 16-bit PCM, mono, at this sample rate. */
@@ -147,6 +155,13 @@ const downloadFields = {
 export const LocalSttRuntime = z.object({
   /** Runtime version CodeDen pins. */
   version: z.string(),
+  /**
+   * What Whisper runs on: `gpu` (the Vulkan build, on a supported graphics card) or `cpu`;
+   * null until the graphics card check is done.
+   */
+  accelerator: z.enum(["gpu", "cpu"]).nullable().optional(),
+  /** The graphics card it runs on, when `accelerator` is `gpu`. */
+  device: z.string().nullable().optional(),
   ...downloadFields,
 });
 export type LocalSttRuntime = z.infer<typeof LocalSttRuntime>;

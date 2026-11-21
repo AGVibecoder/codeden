@@ -34,13 +34,9 @@ Whisper runs on your own machine through the CodeDen server; your audio never le
 2. Pick a model and press **Download**. CodeDen downloads a small runtime for your platform (about 1.3 MB) and the model, checks both against pinned SHA-256 checksums and shows the progress. You can keep working meanwhile; an interrupted download resumes where it stopped.
 3. Press **Test**, say a sentence, and see the transcript and how long it took.
 
-| Model | Download | Speed and accuracy |
-|---|---|---|
-| Tiny / Tiny (English) | 31 MB | Fastest, lower accuracy |
-| **Base (English)** (default) / Base | 57 MB | Fast, good accuracy |
-| Small / Small (English) | 181 MB | Slower, best accuracy |
-
-- "(English)" models only transcribe English and are the most accurate choice for it; the others handle many languages.
+- **The model** is **Large v3 Turbo** (547 MB download): accurate in many languages, Dutch included. The smaller Whisper models mistook languages and made up sentences too often, so CodeDen no longer offers them; a setting that still names one uses Large v3 Turbo.
+- **On your graphics card:** on Windows with an NVIDIA or AMD Radeon card, CodeDen downloads the Vulkan build of the Whisper runtime (about 13 MB) and runs Whisper on the card, which is many times faster. Settings shows "runs on your graphics card" or "runs on the processor". If the card build doesn't load (no Vulkan driver), CodeDen switches to the processor build by itself. On the processor, Large v3 Turbo takes several seconds per sentence.
+- Phrases shorter than a second get a moment of silence added, which Whisper needs to recognise them.
 - Files live in `~/.codeden/deps/whisper/` (runtime) and `~/.codeden/models/whisper/` (models). **Delete** in Settings removes a model.
 - Supported on Windows, macOS and Linux (x64 and arm64). Linux needs glibc 2.34 or newer (Ubuntu 22.04+, Debian 12+) and `libgomp1`.
 - The runtime is whisper.cpp built as a Node add-on (from the npm registry); models come from Hugging Face. Neither needs an account.

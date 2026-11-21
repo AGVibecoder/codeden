@@ -16,8 +16,10 @@ import {
 } from "@codeden/contracts";
 import type { SettingsStore } from "../../../settings-store";
 import { errorMessage, ServiceError } from "../../errors";
+import { type GpuInfo, pickGpu, windowsAdapterNames } from "../gpu";
 import {
   currentPlatform,
+  GPU_RUNTIME_PINS,
   MODEL_PINS,
   type ModelPin,
   RUNTIME_PINS,
@@ -40,6 +42,10 @@ export interface LocalSttServiceDeps {
   fetch?: typeof fetch;
   platform?: string;
   runtimePins?: Record<string, RuntimePin>;
+  /** Graphics card builds by platform (`GPU_RUNTIME_PINS`). */
+  gpuRuntimePins?: Record<string, RuntimePin>;
+  /** Finds a supported graphics card (Windows' display adapters by default). */
+  detectGpu?: () => Promise<GpuInfo>;
   models?: ModelPin[];
   loadRuntime?: LoadWhisperRuntime;
   /** Unload the model after this long without use (default 10 minutes). */
@@ -54,6 +60,15 @@ interface Job {
 }
 
 const RUNTIME = "runtime";
+
+/** 16-bit mono PCM at 16 kHz, padded with silence to at least one second. */
+function atLeastOneSecond(pcm: ArrayBuffer): ArrayBuffer {
+  const second = 16_000 * 2;
+  if (pcm.byteLength >= second) return pcm;
+  const padded = new Uint8Array(second);
+  padded.set(new Uint8Array(pcm));
+  return padded.buffer;
+}
 
 /**
  * Strip Whisper's non-speech markers such as `[BLANK_AUDIO]` or `(silence)`, and drop a
@@ -105,6 +120,12 @@ function linuxProblem(): string | null {
 export class LocalSttService {
   private readonly platform: string;
   private readonly runtimePin: RuntimePin | undefined;
+  private readonly gpuPin: RuntimePin | undefined;
+  /** The graphics card check, once started; `gpu` null when no supported card was found. */
+  private gpuCheck: Promise<GpuInfo> | null = null;
+  private gpu: GpuInfo | null = null;
+  /** The graphics card build failed to load here: the processor build is used instead. */
+  private gpuFailed = false;
   private readonly models: ModelPin[];
   private readonly problem: string | null;
   private readonly jobs = new Map<string, Job>();
@@ -116,31 +137,52 @@ export class LocalSttService {
   constructor(private readonly deps: LocalSttServiceDeps) {
     this.platform = deps.platform ?? currentPlatform();
     this.runtimePin = (deps.runtimePins ?? RUNTIME_PINS)[this.platform];
+    this.gpuPin = (deps.gpuRuntimePins ?? GPU_RUNTIME_PINS)[this.platform];
     this.models = deps.models ?? MODEL_PINS;
     this.problem = !this.runtimePin
       ? `No prebuilt Whisper runtime for ${this.platform}`
       : !deps.platform && process.platform === "linux"
         ? linuxProblem()
         : null;
+    if (this.gpuPin) void this.checkGpu();
   }
 
-  private get addonPath(): string {
-    const version = this.runtimePin?.version ?? WHISPER_RUNTIME_VERSION;
-    return join(this.deps.runtimeDir, `${version}-${this.platform}`, "whisper.node");
+  /** Look for a supported graphics card once (only where a graphics card build exists). */
+  private checkGpu(): Promise<GpuInfo> {
+    if (!this.gpuPin) return Promise.resolve({ gpu: null, name: null });
+    this.gpuCheck ??= (this.deps.detectGpu ?? (() => windowsAdapterNames().then(pickGpu)))()
+      .catch(() => ({ gpu: null, name: null }))
+      .then((info) => {
+        this.gpu = info;
+        return info;
+      });
+    return this.gpuCheck;
+  }
+
+  /** The build to use: the graphics card one when a card was found and it loads, else the processor one. */
+  private activePin(): RuntimePin | undefined {
+    return this.gpuPin && this.gpu?.gpu && !this.gpuFailed ? this.gpuPin : this.runtimePin;
+  }
+
+  private addonPath(pin: RuntimePin | undefined = this.activePin()): string {
+    const version = pin?.version ?? WHISPER_RUNTIME_VERSION;
+    const variant = pin?.variant ? `-${pin.variant}` : "";
+    return join(this.deps.runtimeDir, `${version}-${this.platform}${variant}`, "whisper.node");
   }
 
   private modelPath(pin: ModelPin): string {
     return join(this.deps.modelsDir, pin.file);
   }
 
+  /** A model by id; one no longer offered (an older setting) is the model offered now. */
   private pin(id: WhisperModelId): ModelPin {
-    const pin = this.models.find((m) => m.id === id);
+    const pin = this.models.find((m) => m.id === id) ?? this.models[0];
     if (!pin) throw new ServiceError(404, "unknown_model", `Unknown Whisper model: ${id}`);
     return pin;
   }
 
-  private runtimeInstalled(): boolean {
-    return existsSync(this.addonPath);
+  private runtimeInstalled(pin: RuntimePin | undefined = this.activePin()): boolean {
+    return existsSync(this.addonPath(pin));
   }
 
   private modelInstalled(pin: ModelPin): boolean {
@@ -167,18 +209,21 @@ export class LocalSttService {
         error: state === "failed" ? (this.errors.get(key) ?? null) : null,
       } as const;
     };
-    const runtime = this.runtimePin;
+    const runtime = this.activePin();
+    const onGpu = Boolean(runtime?.variant);
     return {
       supported: this.problem === null,
       platform: this.platform,
       unsupportedReason: this.problem,
       runtime: {
         version: runtime?.version ?? WHISPER_RUNTIME_VERSION,
+        accelerator: this.gpuPin && !this.gpu ? null : onGpu ? "gpu" : "cpu",
+        device: onGpu ? (this.gpu?.name ?? null) : null,
         ...entry(
-          RUNTIME,
+          this.runtimeKey(runtime),
           runtime?.bytes ?? 0,
-          this.runtimeInstalled() ? this.addonPath : null,
-          partialPath(this.archivePath()),
+          this.runtimeInstalled(runtime) ? this.addonPath(runtime) : null,
+          partialPath(this.archivePath(runtime)),
         ),
       },
       models: this.models.map((m) => ({
@@ -202,9 +247,11 @@ export class LocalSttService {
   download(id: WhisperModelId): LocalSttStatus {
     if (this.problem) throw new ServiceError(409, "unsupported_platform", this.problem);
     const pin = this.pin(id);
-    if (!this.jobs.has(id) && !(this.runtimeInstalled() && this.modelInstalled(pin))) {
-      this.track(id, async (signal, progress) => {
-        await abortable(this.ensureRuntime(), signal);
+    if (!this.jobs.has(pin.id) && !(this.runtimeInstalled() && this.modelInstalled(pin))) {
+      this.track(pin.id, async (signal, progress) => {
+        // Which build to fetch depends on the graphics card check.
+        await abortable(this.checkGpu(), signal);
+        await abortable(this.ensureRuntime(this.activePin()), signal);
         if (this.modelInstalled(pin)) return;
         await downloadVerified({
           file: pin,
@@ -222,16 +269,16 @@ export class LocalSttService {
   /** Cancel a running download or delete a downloaded model (and its partial file). */
   async remove(id: WhisperModelId): Promise<LocalSttStatus> {
     const pin = this.pin(id);
-    const job = this.jobs.get(id);
+    const job = this.jobs.get(pin.id);
     if (job) {
       job.abort.abort();
       await job.promise.catch(() => {});
     }
     // Wait for a transcription that is using the model before freeing it.
-    if (this.loaded?.id === id) await this.serially(() => this.unload());
+    if (this.loaded?.id === pin.id) await this.serially(() => this.unload());
     rmSync(this.modelPath(pin), { force: true });
     rmSync(partialPath(this.modelPath(pin)), { force: true });
-    this.errors.delete(id);
+    this.errors.delete(pin.id);
     return this.status();
   }
 
@@ -250,7 +297,8 @@ export class LocalSttService {
     } = {},
   ): Promise<SttResponse> {
     if (this.problem) throw new ServiceError(409, "unsupported_platform", this.problem);
-    const { pcm } = parseWav(audio);
+    // Whisper's encoder works on at least a second: a very short phrase gets silence after it.
+    const pcm = atLeastOneSecond(parseWav(audio).pcm);
     const pin = this.pin(this.deps.settings.get().voice.dictation.local.model);
     if (!this.runtimeInstalled() || !this.modelInstalled(pin)) {
       throw new ServiceError(
@@ -311,17 +359,21 @@ export class LocalSttService {
     await this.unload();
   }
 
-  private archivePath(): string {
-    const name = this.runtimePin?.url.split("/").pop() ?? "runtime.tgz";
+  private archivePath(pin: RuntimePin | undefined = this.activePin()): string {
+    const name = pin?.url.split("/").pop() ?? "runtime.tgz";
     return join(this.deps.runtimeDir, ".downloads", name);
   }
 
-  private ensureRuntime(): Promise<void> {
-    const pin = this.runtimePin;
+  /** The download key of a build: `runtime`, or `runtime-vulkan` for the graphics card one. */
+  private runtimeKey(pin: RuntimePin | undefined): string {
+    return pin?.variant ? `${RUNTIME}-${pin.variant}` : RUNTIME;
+  }
+
+  private ensureRuntime(pin: RuntimePin | undefined): Promise<void> {
     if (!pin) return Promise.reject(new Error(this.problem ?? "No runtime"));
-    if (this.runtimeInstalled()) return Promise.resolve();
-    return this.track(RUNTIME, async (signal, progress) => {
-      const archive = this.archivePath();
+    if (this.runtimeInstalled(pin)) return Promise.resolve();
+    return this.track(this.runtimeKey(pin), async (signal, progress) => {
+      const archive = this.archivePath(pin);
       await downloadVerified({
         file: pin,
         dest: archive,
@@ -330,12 +382,15 @@ export class LocalSttService {
         onProgress: progress,
       });
       const addon = extractTgzEntry(readFileSync(archive), pin.entry);
-      mkdirSync(join(this.addonPath, ".."), { recursive: true });
-      const staging = `${this.addonPath}.tmp`;
+      const target = this.addonPath(pin);
+      mkdirSync(join(target, ".."), { recursive: true });
+      const staging = `${target}.tmp`;
       writeFileSync(staging, addon, { mode: 0o755 });
-      renameSync(staging, this.addonPath);
+      renameSync(staging, target);
       rmSync(archive, { force: true });
-      this.deps.log?.(`Whisper runtime ${pin.version} installed for ${this.platform}`);
+      this.deps.log?.(
+        `Whisper runtime ${pin.version}${pin.variant ? ` (${pin.variant})` : ""} installed for ${this.platform}`,
+      );
     });
   }
 
@@ -374,8 +429,27 @@ export class LocalSttService {
     clearTimeout(this.idleTimer);
     if (this.loaded?.id === pin.id) return this.loaded.model;
     await this.unload();
-    const runtime = await (this.deps.loadRuntime ?? loadNativeRuntime)(this.addonPath);
-    const model = await runtime.loadModel(this.modelPath(pin));
+    const load = async (runtimePin: RuntimePin | undefined) => {
+      const runtime = await (this.deps.loadRuntime ?? loadNativeRuntime)(
+        this.addonPath(runtimePin),
+      );
+      return runtime.loadModel(this.modelPath(pin));
+    };
+    const active = this.activePin();
+    let model: WhisperModel;
+    try {
+      model = await load(active);
+    } catch (error) {
+      // The graphics card build didn't load (no Vulkan driver, an unsupported card): use the
+      // processor build, fetching it first (about 1 MB) if needed.
+      if (!active?.variant) throw error;
+      this.gpuFailed = true;
+      this.deps.log?.(
+        `Whisper on the graphics card failed, using the processor: ${errorMessage(error)}`,
+      );
+      await this.ensureRuntime(this.runtimePin);
+      model = await load(this.runtimePin);
+    }
     this.loaded = { id: pin.id, model };
     return model;
   }

@@ -7,13 +7,13 @@ import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ServiceError } from "../src/services/errors";
 import { ChatterboxService } from "../src/services/voice/chatterbox/chatterbox-service";
-import { pickGpu } from "../src/services/voice/chatterbox/gpu";
 import {
   chatterboxEnv,
   chatterboxPaths,
   type RunProgram,
 } from "../src/services/voice/chatterbox/install";
 import { ChatterboxSpeech } from "../src/services/voice/chatterbox/speech";
+import { pickGpu } from "../src/services/voice/gpu";
 import { removeTree } from "./support/remove-tree";
 
 /** A speech process that answers each request through `answer`. */

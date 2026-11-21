@@ -99,7 +99,8 @@ describe("local Whisper settings", () => {
   it("downloads the chosen model and can cancel it", async () => {
     const client = createMockClient();
     renderWithClient(<LocalWhisperRows />, client);
-    expect(await screen.findByText(/Not downloaded · 58.1 MB download/)).toBeTruthy();
+    // Large v3 Turbo and the runtime.
+    expect(await screen.findByText(/Not downloaded · 548\.6 MB download/)).toBeTruthy();
     expect((screen.getByRole("button", { name: /Test/ }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: /Download/ }));
     expect(await screen.findByRole("button", { name: /Cancel/ })).toBeTruthy();

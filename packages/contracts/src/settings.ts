@@ -190,7 +190,7 @@ export const Settings = z.object({
           /** Local Whisper: which downloaded model transcribes (§11.3). */
           local: z
             .object({
-              model: WhisperModelId.default("base.en"),
+              model: WhisperModelId.default("large-v3-turbo"),
             })
             .prefault({}),
         })

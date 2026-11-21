@@ -5,23 +5,15 @@ type ModelInfo = Pick<LocalSttModel, "id" | "label" | "hint" | "englishOnly" | "
 };
 
 const MODELS: ModelInfo[] = [
-  { id: "tiny.en", label: "Tiny (English)", hint: "Fastest, lower accuracy", bytes: 32_166_155 },
-  { id: "tiny", label: "Tiny", hint: "Fastest, lower accuracy, many languages", bytes: 32_152_673 },
-  { id: "base.en", label: "Base (English)", hint: "Fast, good accuracy", bytes: 59_721_011 },
-  { id: "base", label: "Base", hint: "Fast, good accuracy, many languages", bytes: 59_707_625 },
-  { id: "small.en", label: "Small (English)", hint: "Slower, best accuracy", bytes: 190_098_681 },
   {
-    id: "small",
-    label: "Small",
-    hint: "Slower, best accuracy, many languages",
-    bytes: 190_085_487,
+    id: "large-v3-turbo" as WhisperModelId,
+    label: "Large v3 Turbo",
+    hint: "Accurate in many languages; fast on a graphics card",
+    bytes: 574_041_195,
+    englishOnly: false,
+    recommended: true,
   },
-].map((m) => ({
-  ...m,
-  id: m.id as WhisperModelId,
-  englishOnly: m.id.endsWith(".en"),
-  recommended: m.id === "base.en",
-}));
+];
 
 const RUNTIME_BYTES = 1_205_460;
 
