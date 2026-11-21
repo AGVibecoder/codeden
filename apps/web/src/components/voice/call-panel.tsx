@@ -14,7 +14,7 @@ import { callActive, useCallStore } from "@/stores/call";
 const PHASE_LABEL = {
   listening: "Listening…",
   thinking: "Working on it…",
-  speaking: "Speaking · talk to interrupt",
+  speaking: "Speaking…",
   ended: "Call ended",
 } as const;
 
@@ -57,6 +57,7 @@ export function CallPanel() {
   const state = useCallStore((s) => s.state);
   const level = useCallStore((s) => s.level);
   const hangUp = useCallStore((s) => s.hangUp);
+  const headset = useSettings().settings.voice.call.audio === "headset";
   const lastError = useRef<string | null>(null);
 
   useEffect(() => {
@@ -82,7 +83,14 @@ export function CallPanel() {
     >
       <div className="flex items-center gap-2 text-xs">
         {icon}
-        <span className="flex-1 font-medium">Orchestrator · {PHASE_LABEL[state.phase]}</span>
+        <span className="flex-1 font-medium">
+          Orchestrator · {PHASE_LABEL[state.phase]}
+          {state.phase === "speaking" && (
+            <span className="font-normal text-muted-foreground">
+              {headset ? " talk to interrupt" : " microphone paused"}
+            </span>
+          )}
+        </span>
         <Button size="xs" variant="destructive" className="gap-1" onClick={hangUp}>
           <PhoneOff className="size-3" /> Hang up
         </Button>

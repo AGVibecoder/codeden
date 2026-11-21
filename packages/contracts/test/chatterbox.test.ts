@@ -39,6 +39,7 @@ describe("chatterbox contracts", () => {
 
   it("defaults the call's wake word to off with Hey Annie", () => {
     expect(Settings.parse({}).voice.call.wakeWord).toEqual({ enabled: false, phrase: "Hey Annie" });
+    expect(Settings.parse({}).voice.call.audio).toBe("speakers");
     expect(
       Settings.parse({ voice: { call: { wakeWord: { enabled: true, phrase: "Hey Den" } } } }).voice
         .call.wakeWord,

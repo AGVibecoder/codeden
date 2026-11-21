@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SettingRow, useSettings } from "./settings-ui";
+import { Segmented, SettingRow, useSettings } from "./settings-ui";
 
-/** Settings › Voice › Dictation rows for the call's wake word (§11.3). */
+/** Settings › Voice › Dictation rows for calls (§11.3): headset or speakers, and the wake word. */
 export function WakeWordRows() {
   const { settings, update } = useSettings();
   const wake = settings.voice.call.wakeWord;
@@ -20,6 +20,23 @@ export function WakeWordRows() {
 
   return (
     <>
+      <SettingRow
+        label="Calls"
+        help={
+          settings.voice.call.audio === "headset"
+            ? "Headset: the microphone stays on during a call, and talking cuts the orchestrator off."
+            : "Speakers: the microphone pauses while the orchestrator speaks, so it doesn't hear itself, and listens again when it's done."
+        }
+      >
+        <Segmented
+          value={settings.voice.call.audio}
+          onChange={(audio) => update({ voice: { call: { audio } } })}
+          options={[
+            { value: "headset", label: "Headset" },
+            { value: "speakers", label: "Speakers" },
+          ]}
+        />
+      </SettingRow>
       <SettingRow
         label="Wake word"
         help={

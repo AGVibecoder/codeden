@@ -214,6 +214,12 @@ export const Settings = z.object({
       call: z
         .object({
           /**
+           * `headset`: the microphone stays on and talking cuts an answer off. `speakers`: the
+           * microphone pauses while an answer plays, so it never hears the answer, and turns
+           * back on when it ends.
+           */
+          audio: z.enum(["headset", "speakers"]).default("speakers"),
+          /**
            * Start a call by saying `phrase`, listened for with the dictation engine while
            * CodeDen is open. Only the browser and local Whisper engines listen for it, so
            * nothing is sent to a cloud engine while no call is on.

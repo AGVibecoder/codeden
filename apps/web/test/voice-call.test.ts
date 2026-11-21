@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type CallState, matchWakeWord, VoiceCall, VoiceDetector } from "../src/lib/voice/call";
+import { type CallState, matchWakeWord, realWords, VoiceCall } from "../src/lib/voice/call";
 import type { DictationText, SpeechToText } from "../src/lib/voice/engines";
 
 /** A dictation engine the test drives by hand. */
@@ -123,20 +123,60 @@ describe("VoiceCall", () => {
     call.hangUp();
   });
 
-  it("cuts off an answer on a sustained voice level, not a click", async () => {
-    const { call, level, time, spoken, reply } = setup();
+  it("keeps talking through a cough or an uh, and sends nothing for it", async () => {
+    const { call, say, level, time, sent, spoken, reply } = setup();
     call.start();
-    for (let i = 0; i < 20; i++) level(0.005); // the room
     reply("Here is the status.");
     await tick();
-    level(0.2); // a short click
-    time.advance(50);
-    level(0.004);
+    level(0.3); // loud, but no words
+    say({ final: "(coughs)", draft: "" });
+    say({ final: "(coughs) uh", draft: "hmm" });
     expect(spoken[0]?.signal.aborted).toBe(false);
-    level(0.2); // you, talking
-    time.advance(200);
-    level(0.2);
+    time.flush();
+    await tick();
+    expect(sent).toEqual([]);
+    say({ final: "(coughs) uh stop", draft: "" });
     expect(spoken[0]?.signal.aborted).toBe(true);
+    time.flush();
+    await tick();
+    expect(sent).toEqual(["uh stop"]);
+    call.hangUp();
+  });
+
+  it("with speakers, pauses the microphone while an answer plays", async () => {
+    const { engine, say } = fakeEngine();
+    const time = fakeTime();
+    const sent: string[] = [];
+    let reply: (m: string) => void = () => {};
+    let finish: () => void = () => {};
+    const call = new VoiceCall({
+      engine,
+      audio: "speakers",
+      send: async (text) => {
+        sent.push(text);
+      },
+      watchReplies: (onReply) => {
+        reply = onReply;
+        return () => {};
+      },
+      speak: () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+      onState: () => {},
+      ...time,
+    });
+    call.start();
+    say({ final: "check the logs", draft: "" }); // said before the answer: still sent
+    reply("Looking now.");
+    await tick();
+    expect(sent).toEqual(["check the logs"]);
+    expect(engine.stops).toBe(1);
+    expect(engine.starts).toBe(1);
+    finish();
+    await tick();
+    expect(engine.starts).toBe(2); // listening again
+    expect(call.phase).toBe("thinking");
     call.hangUp();
   });
 
@@ -172,15 +212,13 @@ describe("VoiceCall", () => {
   });
 });
 
-describe("VoiceDetector", () => {
-  it("needs a voice above the room for a moment", () => {
-    let now = 0;
-    const d = new VoiceDetector(() => now);
-    for (let i = 0; i < 10; i++) d.push(0.01);
-    expect(d.push(0.025)).toBe(false); // above the minimum, but not 3x the room
-    expect(d.push(0.1)).toBe(false);
-    now += 160;
-    expect(d.push(0.1)).toBe(true);
+describe("realWords", () => {
+  it("drops noise markers, punctuation and hesitations", () => {
+    expect(realWords("(coughs)")).toBe("");
+    expect(realWords("[noise] uh, hmm... *sneezes*")).toBe("");
+    expect(realWords("Uh, run the tests.")).toBe("run the tests");
+    expect(realWords("deploy v2")).toBe("deploy v2");
+    expect(realWords("a")).toBe("");
   });
 });
 

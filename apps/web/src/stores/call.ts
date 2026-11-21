@@ -107,6 +107,7 @@ export const useCallStore = create<CallStore>()((set) => ({
     const call = new VoiceCall({
       engine,
       language: settings.voice.dictation.language,
+      audio: settings.voice.call.audio,
       send: async (text) => {
         await client.orchestration.send(
           "orchestrator",

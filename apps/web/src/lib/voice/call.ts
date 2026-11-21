@@ -30,51 +30,57 @@ export interface CallDeps {
   speak: (markdown: string, signal: AbortSignal) => Promise<void>;
   onState: (state: CallState) => void;
   onLevel?: (level: number | null) => void;
+  /**
+   * `headset` (default): the microphone stays on and talking cuts an answer off. `speakers`:
+   * the microphone pauses while an answer plays and turns back on when it ends.
+   */
+  audio?: "headset" | "speakers";
   /** How long you may pause before what you said is sent (default 1.2 s). */
   pauseMs?: number;
-  /** Timers and clock (fakes in tests). */
+  /** Timers (fakes in tests). */
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
-  now?: () => number;
 }
 
-/** Sustained voice this long, in ms, cuts off an answer. */
-const BARGE_IN_MS = 150;
-/** Quietest level counted as a voice, whatever the room. */
-const MIN_VOICE_LEVEL = 0.02;
-/** A voice is this many times the room's level. */
-const VOICE_RATIO = 3;
+/** Sounds a recognizer writes for a cough or a hesitation, never a word you meant. */
+const NOT_WORDS = new Set([
+  "uh",
+  "uhm",
+  "um",
+  "umm",
+  "hm",
+  "hmm",
+  "mm",
+  "mhm",
+  "ah",
+  "eh",
+  "oh",
+  "huh",
+  "er",
+  "erm",
+]);
 
 /**
- * Tells a voice from the room by the microphone level: a floor that drops to quiet at once and
- * rises slowly, and a voice that stays above it for `BARGE_IN_MS`.
+ * The words in `text`, without what a recognizer writes for noise: anything in brackets or
+ * parentheses (`[noise]`, `(coughs)`), punctuation, and hesitation sounds. Empty when nothing
+ * real was said, such as a cough.
  */
-export class VoiceDetector {
-  private floor = 0;
-  private since: number | null = null;
-
-  constructor(private readonly now: () => number = () => performance.now()) {}
-
-  /** Feed one level; true once a voice has lasted long enough. */
-  push(level: number): boolean {
-    this.floor =
-      level < this.floor || this.floor === 0 ? level : this.floor + (level - this.floor) * 0.01;
-    const voice = level > Math.max(MIN_VOICE_LEVEL, this.floor * VOICE_RATIO);
-    if (!voice) {
-      this.since = null;
-      return false;
-    }
-    this.since ??= this.now();
-    return this.now() - this.since >= BARGE_IN_MS;
-  }
+export function realWords(text: string): string {
+  return text
+    .replace(/\[[^\]]*\]|\([^)]*\)|\*[^*]*\*/g, " ")
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\p{L}\p{N}'’-]/gu, ""))
+    .filter((w) => /\p{L}.*\p{L}|\p{N}/u.test(w) && !NOT_WORDS.has(w.toLowerCase()))
+    .join(" ");
 }
 
 /**
- * A voice call with the orchestrator (§11.3). The microphone stays on for the whole call: each
- * time you pause, what you said since the last pause is sent straight away, even while the
- * orchestrator is working or speaking (it queues behind a running turn). Every answer the
- * orchestrator finishes is spoken, and the moment you start talking it stops speaking. The
- * microphone's echo cancellation keeps CodeDen's own voice out of what it hears.
+ * A voice call with the orchestrator (§11.3). Each time you pause, what you said since the
+ * last pause is sent straight away, even while the orchestrator is working (it queues behind a
+ * running turn), and every answer it finishes is spoken. With a `headset` the microphone stays
+ * on and the answer stops as soon as a real word is heard (a cough or "uh" doesn't count).
+ * With `speakers` the microphone is off
+ * while an answer plays, so it never hears it, and turns back on when the answer ends.
  */
 export class VoiceCall {
   private state: CallState = { phase: "listening", heard: "", draft: "", reply: "", error: null };
@@ -85,12 +91,15 @@ export class VoiceCall {
   private waiting = 0;
   private speaking: AbortController | null = null;
   private stopReplies: () => void = () => {};
-  private readonly voice: VoiceDetector;
   private ended = false;
+  /** `speakers`: the microphone is off while an answer plays. */
+  private paused = false;
 
-  constructor(private readonly deps: CallDeps) {
-    this.voice = new VoiceDetector(deps.now);
+  private get headset(): boolean {
+    return (this.deps.audio ?? "headset") === "headset";
   }
+
+  constructor(private readonly deps: CallDeps) {}
 
   get phase(): CallPhase {
     return this.state.phase;
@@ -130,9 +139,9 @@ export class VoiceCall {
     this.timer = null;
   }
 
-  /** You started talking: stop the answer that is playing. */
+  /** You started talking: stop the answer that is playing (headset only). */
   private interrupt(): void {
-    if (!this.speaking) return;
+    if (!this.speaking || !this.headset) return;
     this.speaking.abort();
     this.speaking = null;
     this.set({ phase: this.idlePhase() });
@@ -147,8 +156,9 @@ export class VoiceCall {
       onText: (text) => {
         if (this.ended) return;
         this.settled = text.final;
-        const fresh = text.final.slice(this.sentLength).trim();
-        const draft = [fresh, text.draft.trim()].filter(Boolean).join(" ");
+        // Coughs and hesitations aren't words: they neither cut the answer off nor get sent.
+        const fresh = realWords(text.final.slice(this.sentLength));
+        const draft = [fresh, realWords(text.draft)].filter(Boolean).join(" ");
         if (draft) this.interrupt();
         this.set({ draft });
         this.clear();
@@ -160,12 +170,10 @@ export class VoiceCall {
           );
         }
       },
-      onLevel: (level) => {
-        this.deps.onLevel?.(level);
-        if (this.voice.push(level)) this.interrupt();
-      },
+      onLevel: (level) => this.deps.onLevel?.(level),
       onEnd: () => {
-        if (this.ended) return;
+        // Paused for an answer (speakers): `answer()` turns the microphone back on.
+        if (this.ended || this.paused) return;
         // The engine stopped on its own (a browser ends recognition after silence): send what
         // is left and keep listening with a fresh transcript.
         this.flush();
@@ -178,9 +186,14 @@ export class VoiceCall {
   /** Send what was said since the last send. */
   private flush(): void {
     this.timer = null;
-    const fresh = this.settled.slice(this.sentLength).trim();
+    // Noise markers (`(coughs)`, `[noise]`) are dropped; a pause with no real words sends nothing.
+    const fresh = this.settled
+      .slice(this.sentLength)
+      .replace(/\[[^\]]*\]|\([^)]*\)|\*[^*]*\*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
     this.sentLength = this.settled.length;
-    if (fresh) void this.send(fresh);
+    if (realWords(fresh)) void this.send(fresh);
   }
 
   private async send(text: string): Promise<void> {
@@ -205,7 +218,15 @@ export class VoiceCall {
     this.speaking?.abort();
     const controller = new AbortController();
     this.speaking = controller;
-    this.set({ phase: "speaking", reply: markdown });
+    if (!this.headset && !this.paused) {
+      // Speakers: send what was already said, then the microphone is off until the answer ends.
+      this.clear();
+      this.flush();
+      this.paused = true;
+      this.deps.engine.stop();
+      this.deps.onLevel?.(null);
+    }
+    this.set({ phase: "speaking", reply: markdown, draft: "" });
     try {
       await this.deps.speak(markdown, controller.signal);
     } catch {
@@ -213,7 +234,12 @@ export class VoiceCall {
     }
     if (this.speaking === controller) {
       this.speaking = null;
-      if (!this.ended) this.set({ phase: this.idlePhase() });
+      if (this.ended) return;
+      this.set({ phase: this.idlePhase() });
+      if (this.paused) {
+        this.paused = false;
+        this.listen();
+      }
     }
   }
 
