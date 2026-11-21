@@ -74,10 +74,10 @@ describe("voice contracts", () => {
     expect(LocalSttModelParams.safeParse({ id: "large-v3" }).success).toBe(false);
   });
 
-  it("defaults dictation to the browser with base.en for local Whisper", () => {
+  it("defaults dictation to the browser with large-v3-turbo for local Whisper", () => {
     const s = Settings.parse({});
     expect(s.voice.dictation.engine).toBe("browser");
-    expect(s.voice.dictation.local).toEqual({ model: "base.en" });
+    expect(s.voice.dictation.local).toEqual({ model: "large-v3-turbo" });
     const local = Settings.parse({
       voice: { dictation: { engine: "local", local: { model: "small" } } },
     });

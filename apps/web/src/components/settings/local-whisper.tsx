@@ -73,13 +73,27 @@ export function modelStatusText(status: LocalSttStatus, model: LocalSttModel): s
   }
   if (model.state === "installed") {
     const onDisk = (model.sizeOnDisk ?? 0) + (status.runtime.sizeOnDisk ?? 0);
-    return `Installed · ${formatBytes(onDisk)} on disk`;
+    const runsOn =
+      status.runtime.accelerator === "gpu"
+        ? ` · runs on your graphics card${status.runtime.device ? ` (${status.runtime.device})` : ""}`
+        : status.runtime.accelerator === "cpu"
+          ? " · runs on the processor"
+          : "";
+    return `Installed · ${formatBytes(onDisk)} on disk${runsOn}`;
   }
   if (model.state === "failed") return model.error ?? "The download failed";
   const runtime = status.runtime.state === "installed" ? 0 : status.runtime.totalBytes;
   const resume =
     model.receivedBytes > 0 ? ` (${percent(model.receivedBytes, model.totalBytes)}% done)` : "";
   return `Not downloaded · ${formatBytes(model.totalBytes + runtime)} download${resume}`;
+}
+
+/**
+ * The model a setting stands for: itself when offered, else the first one offered (an older
+ * setting naming a model CodeDen no longer offers, which the server also maps).
+ */
+export function offeredModel(status: LocalSttStatus | undefined, id: WhisperModelId) {
+  return status?.models.find((m) => m.id === id) ?? status?.models[0];
 }
 
 /** The model picker: name, download size, speed and accuracy hint, and whether it is on disk. */
@@ -94,9 +108,9 @@ export function WhisperModelSelect({
   onChange: (id: WhisperModelId) => void;
   className?: string;
 }) {
-  const current = status?.models.find((m) => m.id === value);
+  const current = offeredModel(status, value);
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as WhisperModelId)}>
+    <Select value={current?.id ?? value} onValueChange={(v) => onChange(v as WhisperModelId)}>
       <SelectTrigger size="sm" className={cn("w-60", className)} aria-label="Whisper model">
         <SelectValue>
           {current ? `${current.label} · ${formatBytes(current.totalBytes)}` : value}
@@ -129,7 +143,7 @@ export function WhisperModelStatus({
   modelId: WhisperModelId;
 }) {
   const actions = useLocalSttActions();
-  const model = status?.models.find((m) => m.id === modelId);
+  const model = offeredModel(status, modelId);
   if (!status || !model) {
     return <div className="text-2xs text-muted-foreground">Checking local Whisper…</div>;
   }

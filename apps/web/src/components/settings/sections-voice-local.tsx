@@ -1,5 +1,5 @@
 import { dictationLanguageFor } from "@codeden/contracts";
-import { useLocalStt, WhisperModelSelect, WhisperModelStatus } from "./local-whisper";
+import { offeredModel, useLocalStt, WhisperModelSelect, WhisperModelStatus } from "./local-whisper";
 import { WhisperTest } from "./local-whisper-test";
 import { SettingRow, useSettings } from "./settings-ui";
 
@@ -8,7 +8,7 @@ export function LocalWhisperRows() {
   const { settings, update } = useSettings();
   const dictation = settings.voice.dictation;
   const local = useLocalStt();
-  const model = local.data?.models.find((m) => m.id === dictation.local.model);
+  const model = offeredModel(local.data, dictation.local.model);
   return (
     <>
       <SettingRow
