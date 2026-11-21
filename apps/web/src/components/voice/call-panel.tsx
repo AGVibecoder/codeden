@@ -6,11 +6,12 @@ import { useSettings } from "@/components/settings/settings-ui";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useClient } from "@/lib/api";
+import { useProject } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { createCloudStt } from "@/lib/voice/cloud-stt";
 import { stt as browserStt } from "@/lib/voice/engines";
 import { WakeWordListener } from "@/lib/voice/wake-word";
-import { callActive, useCallStore } from "@/stores/call";
+import { type CallTarget, callActive, sameTarget, useCallStore } from "@/stores/call";
 
 const PHASE_LABEL = {
   listening: "Listening…",
@@ -19,34 +20,54 @@ const PHASE_LABEL = {
   ended: "Call ended",
 } as const;
 
+/** "the orchestrator" or "the codeden project manager", for labels. */
+function useTargetName(target: CallTarget | null): string {
+  const project = useProject(target?.role === "pm" ? target.projectId : null);
+  if (!target || target.role === "orchestrator") return "the orchestrator";
+  return `the ${project?.name ?? "project"} project manager`;
+}
+
 /**
- * Starts a voice call with the orchestrator (§11.3), next to the dictation button in its
- * message box; hangs up while a call is on.
+ * Starts a voice call with the orchestrator or a project manager (§11.3), next to the
+ * dictation button in its message box; hangs up while this call is on. Only one call runs at
+ * a time: while a call with someone else is on, the button says so and does nothing.
  */
-export function CallButton() {
+export function CallButton({ target }: { target: CallTarget }) {
   const phase = useCallStore((s) => s.state?.phase);
+  const current = useCallStore((s) => s.target);
   const start = useCallStore((s) => s.start);
   const hangUp = useCallStore((s) => s.hangUp);
-  const inCall = phase !== undefined && phase !== "ended";
-  const label = inCall ? "Hang up" : "Call the orchestrator; its answers are spoken";
+  const name = useTargetName(target);
+  const otherName = useTargetName(current);
+  const live = phase !== undefined && phase !== "ended";
+  const inCall = live && sameTarget(current, target);
+  const busy = live && !inCall;
+  const label = inCall
+    ? "Hang up"
+    : busy
+      ? `You're in a call with ${otherName}; hang up there first`
+      : `Call ${name}; the answers are spoken`;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => (inCall ? hangUp() : start())}
-          aria-label={label}
-          aria-pressed={inCall}
-          className={cn(
-            "text-muted-foreground",
-            inCall &&
-              "bg-status-failed/12 text-status-failed hover:bg-status-failed/20 hover:text-status-failed",
-          )}
-        >
-          {inCall ? <PhoneOff /> : <Phone />}
-        </Button>
+        <span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            onClick={() => (inCall ? hangUp() : start(target))}
+            aria-label={label}
+            aria-pressed={inCall}
+            className={cn(
+              "text-muted-foreground",
+              inCall &&
+                "bg-status-failed/12 text-status-failed hover:bg-status-failed/20 hover:text-status-failed",
+            )}
+          >
+            {inCall ? <PhoneOff /> : <Phone />}
+          </Button>
+        </span>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
@@ -58,6 +79,8 @@ export function CallPanel() {
   const state = useCallStore((s) => s.state);
   const level = useCallStore((s) => s.level);
   const hangUp = useCallStore((s) => s.hangUp);
+  const target = useCallStore((s) => s.target);
+  const name = useTargetName(target);
   const headset = useSettings().settings.voice.call.audio === "headset";
   const lastError = useRef<string | null>(null);
 
@@ -85,7 +108,7 @@ export function CallPanel() {
       <div className="flex items-center gap-2 text-xs">
         {icon}
         <span className="flex-1 font-medium">
-          Orchestrator · {PHASE_LABEL[state.phase]}
+          {name.charAt(0).toUpperCase() + name.slice(1)} · {PHASE_LABEL[state.phase]}
           {state.phase === "speaking" && (
             <span className="font-normal text-muted-foreground">
               {headset ? " talk to interrupt" : " microphone paused"}
@@ -113,7 +136,10 @@ export function CallPanel() {
       )}
       {state.reply && (
         <p className="line-clamp-4 text-2xs text-muted-foreground">
-          <span className="text-foreground">Orchestrator:</span> {state.reply}
+          <span className="text-foreground">
+            {target?.role === "pm" ? "Project manager" : "Orchestrator"}:
+          </span>{" "}
+          {state.reply}
         </p>
       )}
     </div>
@@ -143,7 +169,9 @@ export function WakeWord() {
       engine,
       phrase: wake.phrase,
       language,
-      onWake: (rest) => useCallStore.getState().start(rest),
+      // The wake word always calls the orchestrator.
+      onWake: (rest) =>
+        useCallStore.getState().start({ role: "orchestrator", projectId: null }, rest),
       onError: (message) => console.warn("wake word:", message),
     });
     listener.current = l;
