@@ -24,7 +24,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useClient } from "@/lib/api";
-import { emptyMcpForm, formToSpec, type McpForm, mcpFormValid, specToForm } from "./mcp-form";
+import {
+  emptyMcpForm,
+  formToSpec,
+  formToStart,
+  type McpForm,
+  mcpFormValid,
+  specToForm,
+} from "./mcp-form";
 import { McpTestResultView, useMcpTest } from "./mcp-test-result";
 import { PatchDialog } from "./patch-dialog";
 
@@ -81,7 +88,7 @@ export function McpServerDialog({
       setProvider(editing.provider);
       setScope(editing.scope);
       setName(editing.name);
-      setForm(specToForm(editing.spec));
+      setForm(specToForm(editing.spec, editing.startCommand));
     } else {
       setProvider("claude");
       setScope("user");
@@ -101,6 +108,7 @@ export function McpServerDialog({
     supportsEnabled: provider === "codex",
     previous: editing?.provider === provider ? editing.spec : undefined,
   });
+  const startCommand = formToStart(form);
   const needsProject = scope !== "user" && !projectId;
   const nameValid = /^[A-Za-z0-9_.-]+$/.test(name);
   const valid = nameValid && mcpFormValid(form) && !needsProject;
@@ -112,7 +120,13 @@ export function McpServerDialog({
   const resetTest = test.reset;
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset whenever the tested values change
   useEffect(() => resetTest(), [open, provider, scope, form, resetTest]);
-  const runTest = () => void test.run({ ...target, name: nameValid ? name : "unsaved", spec });
+  const runTest = () =>
+    void test.run({
+      ...target,
+      name: nameValid ? name : "unsaved",
+      spec,
+      ...(startCommand ? { startCommand } : {}),
+    });
 
   const preview = async () => {
     setDiff(undefined);
@@ -125,7 +139,8 @@ export function McpServerDialog({
     }
   };
   const save = useMutation({
-    mutationFn: () => client.agentConfig.upsertMcp({ ...target, spec }),
+    mutationFn: () =>
+      client.agentConfig.upsertMcp({ ...target, spec, startCommand: startCommand ?? null }),
     onSuccess: (res) => {
       toast.success(`Saved ${name}`, {
         description: res.backupPath ? `Backup: ${res.backupPath}` : res.file,
@@ -259,6 +274,30 @@ export function McpServerDialog({
                     />
                   </Field>
                 )}
+                <div className="grid grid-cols-2 gap-3">
+                  <Field id="mcp-start-command" label="Start command (optional)">
+                    <Input
+                      id="mcp-start-command"
+                      value={form.startCommand}
+                      onChange={(e) => set({ startCommand: e.target.value })}
+                      placeholder="Path of the program that serves this URL"
+                      className="font-mono text-xs"
+                    />
+                  </Field>
+                  <Field id="mcp-start-args" label="Start arguments (one per line)">
+                    <Textarea
+                      id="mcp-start-args"
+                      rows={2}
+                      value={form.startArgs}
+                      onChange={(e) => set({ startArgs: e.target.value })}
+                      className="font-mono text-xs"
+                    />
+                  </Field>
+                </div>
+                <p className="text-2xs text-muted-foreground">
+                  A test runs the start command when nothing answers at the URL, then waits for it.
+                  It is kept on this computer only, not in the config file.
+                </p>
               </>
             )}
             {provider === "codex" && (

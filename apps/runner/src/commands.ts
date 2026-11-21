@@ -262,6 +262,7 @@ export async function executeCommand(core: RunnerCore, command: RunnerCommand): 
         expandEnv: command.expandEnv,
         stdioEnv: command.stdioEnv,
         timeoutMs: command.timeoutMs,
+        start: command.start,
         clientVersion: core.version,
         supervisor: core.supervisor,
       });

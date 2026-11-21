@@ -9,6 +9,7 @@ import {
   type AgentSkill,
   agentConfigFeatures,
   type LoadedAgentConfig,
+  MCP_START_WAIT_MS,
   MCP_TEST_DEFAULT_TIMEOUT_MS,
   type McpServerDiffRequest,
   type McpServerEntry,
@@ -38,6 +39,7 @@ import { AgentConfigFiles } from "./files";
 import { HookShelf } from "./hook-shelf";
 import { AgentConfigHooks } from "./hooks-service";
 import { applyChange, claudeProjectKey, diffChange, readServers, sourceFor } from "./mcp";
+import { McpStartCommands } from "./mcp-start-commands";
 import { claudeAutoMemoryDir, findGitRoot, mainRepoRoot, readJson } from "./paths";
 import { AgentConfigSkills } from "./skills-service";
 import { loadedClaudeCommands, mergeSlashCommands, skillCommand } from "./slash-commands";
@@ -51,6 +53,11 @@ export interface AgentConfigServiceDeps {
   backupDir: string;
   /** `<codeden home>/agent-config/disabled-hooks.json`: hooks switched off in CodeDen. */
   disabledHooksFile: string;
+  /**
+   * `<codeden home>/agent-config/mcp-start-commands.json`: start commands of `http` and `sse`
+   * MCP servers. Without it, servers have none.
+   */
+  mcpStartCommandsFile?: string;
   /** CodeDen's own MCP endpoint as this session's agent sees it (its runner's proxy). */
   mcpProxyUrl: (sessionId: string) => string | null;
   /** The home runner, which runs MCP connection tests next to the code (§4.2). */
@@ -77,8 +84,12 @@ export class AgentConfigService {
   readonly files: AgentConfigFiles;
   readonly hooks: AgentConfigHooks;
   readonly skills: AgentConfigSkills;
+  private readonly startCommands: McpStartCommands | null;
 
   constructor(private readonly deps: AgentConfigServiceDeps) {
+    this.startCommands = deps.mcpStartCommandsFile
+      ? new McpStartCommands(deps.mcpStartCommandsFile)
+      : null;
     this.files = new AgentConfigFiles((l) => this.rootDir(l), deps.backupDir);
     this.hooks = new AgentConfigHooks({
       home: deps.home,
@@ -121,15 +132,26 @@ export class AgentConfigService {
         : []),
       { provider: "codex", scope: "user" },
     ];
-    return targets.flatMap((t) => readServers(sourceFor(t, this.deps.home, project)));
+    return targets
+      .flatMap((t) => readServers(sourceFor(t, this.deps.home, project)))
+      .map((entry) => {
+        const startCommand =
+          entry.spec.type === "stdio" ? undefined : this.startCommands?.get(entry);
+        return startCommand ? { ...entry, startCommand } : entry;
+      });
   }
 
   mcpUpsert(req: McpServerUpsertRequest): McpServerWriteResponse {
+    // Before the native file is written, so an unreadable store changes nothing.
+    if (req.spec.type === "stdio") this.startCommands?.set(req, null);
+    else if (req.startCommand !== undefined) this.startCommands?.set(req, req.startCommand);
     return this.mcpWrite(req, req.spec);
   }
 
   mcpDelete(target: McpServerTarget): McpServerWriteResponse {
-    return this.mcpWrite(target, undefined);
+    const written = this.mcpWrite(target, undefined);
+    this.startCommands?.set(target, null);
+    return written;
   }
 
   mcpDiff(req: McpServerDiffRequest): AgentConfigDiff {
@@ -154,6 +176,12 @@ export class AgentConfigService {
     }
     const cwd =
       req.scope !== "user" && req.projectId ? this.project(req.projectId).path : undefined;
+    const start =
+      spec.type === "stdio"
+        ? undefined
+        : req.spec
+          ? req.startCommand
+          : this.startCommands?.get(req);
     try {
       return await this.deps.runner.request(
         {
@@ -162,8 +190,9 @@ export class AgentConfigService {
           expandEnv: req.provider === "claude",
           stdioEnv: req.provider === "codex" ? "allowlist" : "inherit",
           ...(cwd ? { cwd } : {}),
+          ...(start ? { start } : {}),
         },
-        MCP_TEST_DEFAULT_TIMEOUT_MS + MCP_TEST_SLACK_MS,
+        MCP_TEST_DEFAULT_TIMEOUT_MS + MCP_TEST_SLACK_MS + (start ? MCP_START_WAIT_MS : 0),
       );
     } catch (error) {
       throw toServiceError(error);

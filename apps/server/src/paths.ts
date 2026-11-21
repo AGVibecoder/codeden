@@ -36,6 +36,8 @@ export function homePaths(home: string) {
     backups: join(home, "backups"),
     /** Hooks switched off on the Agents page, until they are enabled again (§12.4). */
     disabledHooks: join(home, "agent-config", "disabled-hooks.json"),
+    /** Start commands of `http` and `sse` MCP servers, which are this machine's own (§12.4). */
+    mcpStartCommands: join(home, "agent-config", "mcp-start-commands.json"),
     /** Dependencies installed on demand, e.g. Claude Code support (§14). */
     deps: join(home, "deps"),
     /** Models downloaded on demand, e.g. local Whisper for dictation (§11.3). */

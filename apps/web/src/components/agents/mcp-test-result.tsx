@@ -94,7 +94,11 @@ export function McpTestResultView({
           : r.toolCount === 1
             ? "1 tool"
             : `${r.toolCount} tools`}
-        <span className="text-muted-foreground"> · {duration(r.durationMs)}</span>
+        <span className="text-muted-foreground">
+          {" "}
+          · {duration(r.durationMs)}
+          {r.started && " · started by its start command"}
+        </span>
       </span>
     );
     body =
