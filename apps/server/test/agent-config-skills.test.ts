@@ -538,32 +538,31 @@ describe("skill switches", () => {
       expect(find("deploy", "claude", "p1")).toMatchObject({ enabled: true, setIn: null });
     });
 
-    it("doesn't read a Codex config.toml that leads outside home", () => {
+    it("reads and writes a Codex config.toml in a ~/.codex folder that is a link", () => {
+      // The user moved `~/.codex` to another drive and left a link (a junction needs no rights).
       const outside = join(dir, "outside-codex");
       put(join(outside, "config.toml"), '[[skills.config]]\nname = "review"\nenabled = false\n');
       put(join(outside, "skills", "review", "SKILL.md"), skillMd("review"));
       rmSync(join(home, ".codex"), { recursive: true, force: true });
       symlinkSync(outside, join(home, ".codex"), "junction");
-      expect(find("review", "codex")).toMatchObject({ enabled: true, setIn: null });
-      expect(errorCode(() => service.skills.diff(request("review", false, "codex")))).toBe(
-        "403 path_outside_root",
+      expect(find("review", "codex")).toMatchObject({ enabled: false });
+      expect(errorCode(() => service.skills.diff(request("review", true, "codex")))).toBe(
+        "no error",
       );
     });
 
-    it("refuses a settings file that leads outside its folder through a link", () => {
+    it("reads and writes settings in a ~/.claude folder that is a link", () => {
       const outside = join(dir, "outside");
       mkdirSync(outside, { recursive: true });
       put(join(outside, "settings.json"), JSON.stringify({ skillOverrides: { lint: "off" } }));
-      // The user's `.claude` folder links outside home (a junction needs no rights on Windows).
       rmSync(join(home, ".claude"), { recursive: true, force: true });
       mkdirSync(join(outside, "skills", "deploy"), { recursive: true });
       writeFileSync(join(outside, "skills", "deploy", "SKILL.md"), skillMd("deploy"));
       symlinkSync(outside, join(home, ".claude"), "junction");
-      expect(errorCode(() => service.skills.diff(request("lint", false, "claude", "p1")))).toBe(
-        "403 path_outside_root",
+      expect(find("lint", "claude", "p1")).toMatchObject({ enabled: false });
+      expect(errorCode(() => service.skills.diff(request("lint", true, "claude", "p1")))).toBe(
+        "no error",
       );
-      // The file outside isn't read either.
-      expect(find("lint", "claude", "p1")).toMatchObject({ enabled: true, setIn: null });
     });
   });
 
