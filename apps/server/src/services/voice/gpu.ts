@@ -20,13 +20,17 @@ export function pickGpu(names: string[]): GpuInfo {
   return { gpu: null, name: clean[0] ?? null };
 }
 
-/** The display adapters Windows reports (an empty list when the query fails). */
-export function windowsAdapterNames(): Promise<string[]> {
+/**
+ * The display adapters Windows reports (an empty list when the query fails). The query can take
+ * a long time on a busy machine (CodeDen starting next to a game engine and a voice model), so
+ * it gets two minutes.
+ */
+export function windowsAdapterNames(timeoutMs = 120_000): Promise<string[]> {
   return new Promise((resolve) => {
     execFile(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_VideoController).Name"],
-      { windowsHide: true, timeout: 15_000 },
+      { windowsHide: true, timeout: timeoutMs },
       (error, stdout) => resolve(error ? [] : String(stdout).split(/\r?\n/)),
     );
   });

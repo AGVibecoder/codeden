@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WhisperModelId } from "@codeden/contracts";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServiceError } from "../src/services/errors";
 import type { ModelPin, RuntimePin } from "../src/services/voice/local/catalog";
 import { GPU_RUNTIME_PINS, MODEL_PINS, RUNTIME_PINS } from "../src/services/voice/local/catalog";
@@ -189,6 +189,57 @@ describe("local Whisper service", () => {
     await svc.transcribe(wav);
     expect(loaded.slice(1)).toEqual([vulkan.toString(), "fake whisper addon bytes"]);
     expect(svc.status().runtime.accelerator).toBe("cpu");
+    await svc.stop();
+  });
+
+  it("waits for the graphics card check and asks again when it failed, instead of using the processor", async () => {
+    const vulkan = Buffer.from("fake vulkan addon bytes");
+    const vulkanTgz = makeTgz({ "package/index.node": vulkan });
+    fake.files.set("/vulkan.tgz", { body: vulkanTgz });
+    const gpuPin = runtimePin({
+      url: `${fake.url}/vulkan.tgz`,
+      sha256: sha256(vulkanTgz),
+      bytes: vulkanTgz.length,
+      variant: "vulkan",
+    });
+    // The first check times out on a busy machine (no adapter at all), the second finds the card
+    // only after a while.
+    let checks = 0;
+    let answer: (info: { gpu: "amd"; name: string }) => void = () => {};
+    const loaded: string[] = [];
+    const svc = new LocalSttService({
+      runtimeDir: join(dir, "deps", "whisper"),
+      modelsDir: join(dir, "models", "whisper"),
+      settings: new SettingsStore(join(dir, "settings.json")),
+      platform: "test-x64",
+      runtimePins: { "test-x64": runtimePin() },
+      gpuRuntimePins: { "test-x64": gpuPin },
+      detectGpu: async () => {
+        checks++;
+        if (checks === 1) return { gpu: null, name: null };
+        return new Promise((resolve) => {
+          answer = resolve;
+        });
+      },
+      models: [modelPin("small")],
+      loadRuntime: async (addonPath) => {
+        loaded.push(readFileSync(addonPath).toString());
+        return fakeRuntime([])(addonPath);
+      },
+      idleUnloadMs: 60_000,
+    });
+    svc.download("small");
+    await svc.settled();
+    expect(svc.status().runtime.accelerator).toBe("cpu");
+    const done = svc.transcribe(makeWav({ seconds: 1 }));
+    // Nothing is loaded while the check is still running.
+    await vi.waitFor(() => expect(checks).toBe(2));
+    expect(loaded).toEqual([]);
+    answer({ gpu: "amd", name: "AMD Radeon RX 7900 XTX" });
+    await done;
+    // The card's build is fetched and used.
+    expect(loaded).toEqual([vulkan.toString()]);
+    expect(svc.status().runtime).toMatchObject({ accelerator: "gpu", state: "installed" });
     await svc.stop();
   });
 

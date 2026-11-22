@@ -130,7 +130,8 @@ export class LocalSttService {
   private readonly problem: string | null;
   private readonly jobs = new Map<string, Job>();
   private readonly errors = new Map<string, string>();
-  private loaded: { id: WhisperModelId; model: WhisperModel } | null = null;
+  /** The loaded model, and whether it runs on the graphics card build. */
+  private loaded: { id: WhisperModelId; model: WhisperModel; onGpu: boolean } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private idleTimer: NodeJS.Timeout | undefined;
 
@@ -147,13 +148,22 @@ export class LocalSttService {
     if (this.gpuPin) void this.checkGpu();
   }
 
-  /** Look for a supported graphics card once (only where a graphics card build exists). */
+  /**
+   * Look for a supported graphics card (only where a graphics card build exists). A check that
+   * found no display adapter at all failed (it timed out on a busy machine), so it isn't kept:
+   * the next transcription asks again instead of using the processor for the whole run.
+   */
   private checkGpu(): Promise<GpuInfo> {
     if (!this.gpuPin) return Promise.resolve({ gpu: null, name: null });
+    if (this.gpu?.gpu) return Promise.resolve(this.gpu);
     this.gpuCheck ??= (this.deps.detectGpu ?? (() => windowsAdapterNames().then(pickGpu)))()
-      .catch(() => ({ gpu: null, name: null }))
+      .catch((): GpuInfo => ({ gpu: null, name: null }))
       .then((info) => {
         this.gpu = info;
+        if (!info.name) {
+          this.gpuCheck = null;
+          this.deps.log?.("Whisper: the graphics card check found no display adapter; retrying");
+        }
         return info;
       });
     return this.gpuCheck;
@@ -300,6 +310,14 @@ export class LocalSttService {
     // Whisper's encoder works on at least a second: a very short phrase gets silence after it.
     const pcm = atLeastOneSecond(parseWav(audio).pcm);
     const pin = this.pin(this.deps.settings.get().voice.dictation.local.model);
+    // Wait for the graphics card check, however long it takes: deciding before it answers
+    // would run the model on the processor, many times slower.
+    await this.checkGpu();
+    // A card found later than the download: fetch its build (about 13 MB) instead of the processor's.
+    const active = this.activePin();
+    if (active?.variant && !this.runtimeInstalled(active) && this.modelInstalled(pin)) {
+      await this.ensureRuntime(active);
+    }
     if (!this.runtimeInstalled() || !this.modelInstalled(pin)) {
       throw new ServiceError(
         409,
@@ -427,7 +445,11 @@ export class LocalSttService {
 
   private async model(pin: ModelPin): Promise<WhisperModel> {
     clearTimeout(this.idleTimer);
-    if (this.loaded?.id === pin.id) return this.loaded.model;
+    const active = this.activePin();
+    // A model loaded on the processor before the graphics card was found is loaded again on it.
+    if (this.loaded?.id === pin.id && (this.loaded.onGpu || !active?.variant)) {
+      return this.loaded.model;
+    }
     await this.unload();
     const load = async (runtimePin: RuntimePin | undefined) => {
       const runtime = await (this.deps.loadRuntime ?? loadNativeRuntime)(
@@ -435,8 +457,8 @@ export class LocalSttService {
       );
       return runtime.loadModel(this.modelPath(pin));
     };
-    const active = this.activePin();
     let model: WhisperModel;
+    let onGpu = Boolean(active?.variant);
     try {
       model = await load(active);
     } catch (error) {
@@ -449,8 +471,9 @@ export class LocalSttService {
       );
       await this.ensureRuntime(this.runtimePin);
       model = await load(this.runtimePin);
+      onGpu = false;
     }
-    this.loaded = { id: pin.id, model };
+    this.loaded = { id: pin.id, model, onGpu };
     return model;
   }
 
