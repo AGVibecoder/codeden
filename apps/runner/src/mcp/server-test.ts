@@ -91,6 +91,7 @@ export async function testMcpServer(opts: McpServerTestOptions): Promise<McpServ
   let protocolVersion: string | null = null;
   let stdio: McpStdioTransport | null = null;
   let launched = false;
+  let launchedPid: number | undefined;
 
   const stdioEnv = opts.stdioEnv ?? "inherit";
   const fail = (error: unknown): McpServerTestResult => {
@@ -125,6 +126,9 @@ export async function testMcpServer(opts: McpServerTestOptions): Promise<McpServ
         waitMs: opts.startWaitMs ?? MCP_START_WAIT_MS,
         project: opts.project,
         spawn: opts.spawn,
+        onLaunch: (pid) => {
+          launchedPid = pid;
+        },
       });
     }
     const transport: Transport = createTransport(server, {
@@ -175,6 +179,7 @@ export async function testMcpServer(opts: McpServerTestOptions): Promise<McpServ
       morePages,
       tools,
       ...(launched ? { started: true } : {}),
+      ...(launched && launchedPid ? { startedPid: launchedPid } : {}),
     };
   } catch (error) {
     return fail(error);

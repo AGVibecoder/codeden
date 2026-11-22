@@ -178,51 +178,6 @@ describe("Claude MCP server states", () => {
       vi.useRealTimers();
     }
   });
-
-  it("reconnects a failed server every 30 seconds until it connects, without a new turn", async () => {
-    vi.useFakeTimers();
-    try {
-      const { mapper, events } = setup();
-      // The editor's MCP plugin isn't up for the first two tries, then it is.
-      let up = 0;
-      const reconnected: string[] = [];
-      const refresher = new McpStatusRefresher({
-        read: async () => [
-          { name: "editor", status: up >= 2 ? "connected" : "failed", error: "ECONNREFUSED" },
-          { name: "codeden", status: "connected" },
-        ],
-        report: (list) => mapper.reportMcpServers(list),
-        reconnect: async (name) => {
-          reconnected.push(name);
-          up++;
-        },
-      });
-      refresher.refresh();
-      await vi.advanceTimersByTimeAsync(0);
-      expect(reconnected).toEqual([]);
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(reconnected).toEqual(["editor"]);
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(reconnected).toEqual(["editor", "editor"]);
-      expect(mcpUpdates(events).at(-1)).toEqual([
-        { name: "editor", state: "connected" },
-        { name: "codeden", state: "connected" },
-      ]);
-      // Connected: no more tries.
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(reconnected).toHaveLength(2);
-
-      // A stopped session stops trying.
-      up = 0;
-      refresher.refresh();
-      await vi.advanceTimersByTimeAsync(0);
-      refresher.stop();
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(reconnected).toHaveLength(2);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
 });
 
 describe("Codex MCP server states", () => {

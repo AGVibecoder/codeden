@@ -10,7 +10,13 @@ import { AutonomyLevel, Id, ProviderId, ReasoningEffort } from "../common";
 import { UnpushedWork } from "../execution";
 import { UserInput } from "../input";
 import { CHECK_MAX_TIMEOUT_SEC, ProjectConfigFile } from "../project-config";
-import { ProviderInfo, ProviderStatus, RuntimeResponse, SessionOptions } from "../provider";
+import {
+  McpServerConfig,
+  ProviderInfo,
+  ProviderStatus,
+  RuntimeResponse,
+  SessionOptions,
+} from "../provider";
 import { ProviderHistoryCommandResults, ProviderHistoryCommands } from "../provider-history";
 import { BrowserCommandResults, BrowserCommands } from "./browser";
 import { BrowserFormCommandResults, BrowserFormCommands } from "./browser-forms";
@@ -233,6 +239,17 @@ export const RunnerCommand = z.discriminatedUnion("name", [
      * its folders until its next start; it never fails the command.
      */
     writableFolders: z.array(z.string().min(1)).max(64).optional(),
+  }),
+  /**
+   * The plugin hub (§12.4): replace the plugins (MCP servers beyond CodeDen's own) a session
+   * running with `pluginsOnDemand` has, from its next tool call. An empty list takes them all
+   * off. `unsupported` without `capabilities.livePlugins`; a plugin that can't connect fails
+   * the command with its error.
+   */
+  z.object({
+    name: z.literal("session.plugins"),
+    sessionId: Id,
+    servers: z.array(McpServerConfig).max(32),
   }),
   z.object({
     name: z.literal("pty.open"),
@@ -479,6 +496,7 @@ export const RunnerCommandResults = {
   "session.respond": Empty,
   "session.stop": Empty,
   "session.configure": Empty,
+  "session.plugins": Empty,
   "pty.open": z.object({ pid: z.int() }),
   "pty.input": Empty,
   "pty.resize": Empty,

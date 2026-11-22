@@ -84,6 +84,18 @@ CodeDen runs the MCP `initialize` handshake and `tools/list` (every page, up to 
 
 The test can't sign in to servers that need an OAuth login. A `401` says so; sign in from the agent's own CLI instead.
 
+### Plugins on demand
+
+Every MCP server an agent has costs context (its tools' descriptions) in every turn, used or not. With **Settings › Autonomy › Plugins on demand** (on by default), Claude Code workers start with only CodeDen's own tools, and your MCP servers become **plugins** they switch on when the task needs them:
+
+- The worker's brief names the plugins set up for it (Claude Code servers at user level and in the project), all off, so they cost nothing meanwhile and a server whose program isn't open shows no warning.
+- **`use_plugin`** switches one on for that worker only. For an HTTP or SSE server with a start command, CodeDen first does what **Test** does: when nothing answers, it opens the program (Unreal, say, with `{project}` filled in from the worker's project) and waits for it. Then the plugin's tools arrive as `mcp__<plugin>__<tool>`, in the running turn.
+- **`close_plugin`** switches it off when the worker is done with it. The worker decides: it leaves a plugin on while it will still use it. A worker's plugins go off when its session ends, and a session that is reopened keeps the plugins it had on.
+- A program CodeDen opened for a plugin closes once no worker has that plugin on. One you opened yourself is never closed.
+- **`list_plugins`** shows which plugins exist and which are on.
+
+Only providers that can switch MCP servers while a session runs take part (today Claude Code, `capabilities.livePlugins`); other agents load your MCP servers themselves, as before. The setting applies to new sessions and the next time a session starts.
+
 ## Hooks
 
 Hooks are commands an agent runs on lifecycle events: before or after a tool call, when you send a prompt, when it stops, at session start and so on. Use them to guard and automate your agents, for example to block risky shell commands or to format files after every edit.
@@ -130,7 +142,7 @@ It's the quickest way to answer "why did the agent do that?" when an old rule is
 
 The **MCP servers** list shows the servers configured for the session, CodeDen's own (`codeden`, "built in") included. For providers that report their servers' live state (today Claude Code and Codex), each row also shows where that server stands right now: **connected**, **starting**, **failed**, **needs sign-in** or **disabled**. Hover a failed server for the provider's error. Servers the provider runs that aren't in the config files CodeDen reads, such as a plugin's servers or Claude connectors, are listed too.
 
-When a server failed or needs sign-in, the agent can't use its tools, so a notice under the session's header names those servers. For a failed server, check its settings on **Agents › MCP servers**, where **Test the connection** tries it. Claude Code sessions try a failed server again every 30 seconds while they run, so a server whose program wasn't up yet when the session started (an editor's MCP plugin, say) connects as soon as the program is running, without restarting the session; the notice then goes away. For one that needs sign-in, sign in through the provider's own MCP login for that server; CodeDen doesn't sign in for you. Where the provider says where a server comes from (today Claude Code), an account connector (such as a claude.ai connector) or a plugin's server that only needs sign-in is left out of the notice: the provider offers those to every session whether the work needs them or not. They still show in What's loaded, and a failed one is still named.
+When a server failed or needs sign-in, the agent can't use its tools, so a notice under the session's header names those servers. For a failed server, check its settings on **Agents › MCP servers**, where **Test the connection** tries it. With plugins on demand (below), a Claude Code worker only has the plugins it switched on, so a server whose program isn't open doesn't show up here. For one that needs sign-in, sign in through the provider's own MCP login for that server; CodeDen doesn't sign in for you. Where the provider says where a server comes from (today Claude Code), an account connector (such as a claude.ai connector) or a plugin's server that only needs sign-in is left out of the notice: the provider offers those to every session whether the work needs them or not. They still show in What's loaded, and a failed one is still named.
 
 The notice goes away once the servers connect. Its close button hides it for those servers in every session of the project, and this browser remembers it across reloads; the notice comes back only when another server gets into trouble, or one of them in another way (a server that needed sign-in now fails). Trouble with CodeDen's own server (`codeden`) is the exception: without it the agent can't ask you questions or report back, so it shows in each session until you dismiss it there. Only server names, states, where they come from and the provider's short error (first line, with anything that looks like a secret masked) are kept; commands, URLs, headers and environment values never are.
 

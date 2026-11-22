@@ -114,6 +114,17 @@ export const Settings = z.object({
       writableFolders: z.array(z.string().min(1).max(500)).max(32).default([]),
     })
     .prefault({}),
+  /**
+   * The plugin hub (§12.4): with `onDemand`, agent sessions on providers that can switch MCP
+   * servers live (`capabilities.livePlugins`) start with only CodeDen's own tools. The user's
+   * other MCP servers (plugins) cost no tokens until the agent switches one on with
+   * `use_plugin`, and go again with `close_plugin` or when the session ends.
+   */
+  plugins: z
+    .object({
+      onDemand: z.boolean().default(true),
+    })
+    .prefault({}),
   providers: z
     .object({
       orchestrator: RoleDefaults.prefault({}),

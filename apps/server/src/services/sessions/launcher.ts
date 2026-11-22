@@ -15,6 +15,7 @@ import type { ArtifactService } from "../artifacts";
 import { errorMessage, ServiceError } from "../errors";
 import type { GitBroker } from "../git-broker";
 import type { InboxService } from "../inbox-service";
+import type { PluginHub } from "../plugins/hub";
 import type { ProjectService } from "../projects/project-service";
 import {
   clonesWorkspaces,
@@ -63,6 +64,8 @@ export interface LauncherDeps extends RunnerDeps {
   sandboxes?: Pick<SandboxService, "wants" | "place" | "release">;
   /** Folders agents may write to outside the worktree (`settings.autonomy.writableFolders`). */
   writableFolders?: () => string[];
+  /** The plugin hub (§12.4): sessions it applies to start with only CodeDen's own tools. */
+  plugins?: Pick<PluginHub, "appliesTo" | "configsFor" | "namesFor">;
 }
 
 /**
@@ -386,6 +389,10 @@ export class SessionLauncher {
         trusted: true,
       });
     }
+    // The plugin hub: only CodeDen's own tools at start, plus the plugins the agent switched on.
+    const onDemand = Boolean(mcpServers.length && this.deps.plugins?.appliesTo(session));
+    const pluginNames = onDemand ? (this.deps.plugins?.namesFor(session) ?? []) : [];
+    const prompt = codedenSystemPrompt(session, project);
     return SessionOptions.parse({
       sessionId: session.id,
       role: session.role,
@@ -395,7 +402,10 @@ export class SessionLauncher {
       autonomy: session.autonomy,
       planMode: session.planMode ?? false,
       resumeToken: session.resumeToken ?? undefined,
-      systemPrompt: codedenSystemPrompt(session, project),
+      systemPrompt: pluginNames.length ? `${prompt}\n\n${pluginBrief(pluginNames)}` : prompt,
+      ...(onDemand
+        ? { pluginsOnDemand: true, plugins: this.deps.plugins?.configsFor(session.id) ?? [] }
+        : {}),
       // The orchestrator and PMs never write project code (§11.2). Agent sessions at the
       // `read_only` level carry it in `autonomy`, so it can change live.
       readOnly: session.role !== "agent",
@@ -546,6 +556,15 @@ export class SessionLauncher {
       };
     }
   }
+}
+
+/** What an agent with plugins on demand is told about them, in its brief. */
+function pluginBrief(names: string[]): string {
+  return [
+    `Plugins (MCP servers) available to you, off until you need one: ${names.join(", ")}.`,
+    "Switch one on with the CodeDen tool use_plugin when your task needs its tools; it opens the plugin's program when needed.",
+    "Leave it on while you'll still use it, and call close_plugin when you're done with it. They go off when your session ends.",
+  ].join(" ");
 }
 
 function plain(cwd: string): PreparedWorkspace {

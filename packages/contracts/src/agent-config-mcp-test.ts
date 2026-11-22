@@ -94,6 +94,8 @@ export const McpServerTestResult = z.discriminatedUnion("ok", [
     tools: z.array(McpTestTool).max(MCP_TEST_MAX_TOOLS),
     /** The server wasn't running, so the test started it with its start command (left running). */
     started: z.boolean().optional(),
+    /** The process the start command started, when it did: the plugin hub closes it later. */
+    startedPid: z.int().positive().optional(),
   }),
   z.object({
     ok: z.literal(false),

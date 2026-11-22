@@ -271,6 +271,20 @@ describe("autonomy changes on a running session (§11.2)", () => {
     expect(() => UpdateSessionRequest.parse({ autonomy: null })).toThrow();
   });
 
+  it("round-trips the plugin hub's session.plugins and defaults plugins to on demand", () => {
+    const command = {
+      name: "session.plugins" as const,
+      sessionId: "s1",
+      servers: [
+        { transport: "http" as const, name: "unreal-mcp", url: "http://127.0.0.1:8000/mcp" },
+        { transport: "http" as const, name: "events", url: "http://127.0.0.1:9/sse", sse: true },
+      ],
+    };
+    expect(RunnerCommand.parse(JSON.parse(JSON.stringify(command)))).toEqual(command);
+    expect(Settings.parse({}).plugins.onDemand).toBe(true);
+    expect(Settings.parse({ plugins: { onDemand: false } }).plugins.onDemand).toBe(false);
+  });
+
   it("round-trips writable folders in the runner's session.configure", () => {
     const command = {
       name: "session.configure" as const,

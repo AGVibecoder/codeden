@@ -43,6 +43,7 @@ const capabilities: ProviderCapabilities = {
   skills: true,
   // CodeDen's policy gates every tool call, so a change applies from the next one.
   liveAutonomy: true,
+  livePlugins: true,
   readOnly: true,
   compact: true,
   // `system/init` and `mcpServerStatus()` report each server's state.

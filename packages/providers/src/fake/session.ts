@@ -2,6 +2,7 @@ import type {
   AgentEvent,
   AutonomyLevel,
   Item,
+  McpServerConfig,
   ProviderCommand,
   RuntimeResponse,
   SessionOptions,
@@ -72,6 +73,13 @@ export class FakeSession implements ProviderSession {
 
   /** Current autonomy. Full skips the scripted command approval, as it would for real. */
   autonomy: AutonomyLevel;
+
+  /** The plugins switched on (tests read them). */
+  plugins: McpServerConfig[] = [];
+
+  async setPlugins(servers: McpServerConfig[]): Promise<void> {
+    this.plugins = [...servers];
+  }
 
   /** The folders it may write to outside its worktree (tests read them). */
   writableFolders: readonly string[] = [];
