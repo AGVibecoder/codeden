@@ -21,6 +21,7 @@
   "mcp": true,
   "skills": true,
   "liveAutonomy": true,
+  "livePlugins": true,
   "readOnly": true,
   "compact": true,
   "mcpStatus": true,

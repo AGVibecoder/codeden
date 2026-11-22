@@ -29,13 +29,16 @@ export interface EnsureStartedOptions {
   sleep?: (ms: number) => Promise<void>;
   /** The clock the wait is measured on (`performance.now` by default). */
   now?: () => number;
+  /** Told the started process's id, so the plugin hub can close it later. */
+  onLaunch?: (pid: number | undefined) => void;
 }
 
 /**
  * Make sure the program behind an `http` or `sse` MCP server is running (§12.4): when nothing
  * answers on the URL's host and port, run the server's start command and wait for the address
  * to answer. Returns whether the command was run. What it starts is the user's own program
- * (an editor, a local service): it runs on its own and is never stopped by CodeDen.
+ * (an editor, a local service): it runs on its own; only the plugin hub closes it again, once
+ * no agent uses the plugin it started it for.
  * Throws when the command can't be started or nothing answers in time.
  */
 export async function ensureServerStarted(opts: EnsureStartedOptions): Promise<boolean> {
@@ -113,6 +116,7 @@ function launch(opts: EnsureStartedOptions): Promise<void> {
       reject(new Error(`Start command failed: ${error.message}`, { cause: error })),
     );
     child.once("spawn", () => {
+      opts.onLaunch?.(child.pid);
       child.unref();
       resolve();
     });

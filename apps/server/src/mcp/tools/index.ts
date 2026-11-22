@@ -21,6 +21,7 @@ import { finish } from "./finish";
 import { generateImage } from "./generate-image";
 import { githubTools } from "./github";
 import { orchestratorTools } from "./orchestrator";
+import { pluginTools } from "./plugins";
 import { pmTools } from "./pm";
 import { reportProgress } from "./report-progress";
 import { shareToChat } from "./share-to-chat";
@@ -49,6 +50,7 @@ export const allTools: AnyServerTool[] = [
   browserEvaluate,
   browserOpenDevServer,
   generateImage,
+  ...pluginTools,
   ...orchestratorTools,
   ...pmTools,
   ...wakeupTools,

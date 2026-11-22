@@ -193,6 +193,9 @@ export async function executeCommand(core: RunnerCore, command: RunnerCommand): 
     case "session.configure":
       await host.configure(command);
       return {};
+    case "session.plugins":
+      await host.plugins(command);
+      return {};
     case "session.stop": {
       core.checks.cancel(command.sessionId);
       const ctx = { home: core.home, supervisor: core.supervisor, cwds: () => host.cwds() };

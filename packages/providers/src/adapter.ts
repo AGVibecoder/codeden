@@ -2,6 +2,7 @@ import type {
   AgentEvent,
   AutonomyLevel,
   ErrorKind,
+  McpServerConfig,
   ModelInfo,
   ProviderCapabilities,
   ProviderHistoryEntry,
@@ -126,6 +127,12 @@ export interface ProviderSession {
    * Optional: without it, the folders apply on the next resume.
    */
   setWritableFolders?(folders: readonly string[]): Promise<void>;
+  /**
+   * The plugin hub (§12.4): replace the plugins (MCP servers beyond `SessionOptions.mcpServers`)
+   * the session has, from its next tool call. Present only with `capabilities().livePlugins`.
+   * Rejects with the provider's error when a plugin can't connect.
+   */
+  setPlugins?(servers: McpServerConfig[]): Promise<void>;
   /**
    * Turn plan mode on or off. Present only when `capabilities().planMode`. On: the agent plans
    * without editing and asks to implement through a `plan` approval. Off: the session returns

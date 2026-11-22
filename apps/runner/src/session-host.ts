@@ -239,6 +239,22 @@ export class SessionHost {
     if (cmd.writableFolders !== undefined) await session.setWritableFolders?.(cmd.writableFolders);
   }
 
+  /** The plugin hub (§12.4): replace the session's plugins, from its next tool call. */
+  async plugins(cmd: RunnerCommandOf<"session.plugins">): Promise<void> {
+    const { session } = this.get(cmd.sessionId);
+    if (!session.setPlugins) {
+      throw new CommandError("unsupported", "This provider cannot switch plugins live");
+    }
+    try {
+      await session.setPlugins(cmd.servers);
+    } catch (error) {
+      throw new CommandError(
+        "plugin_failed",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
   async respond(cmd: RunnerCommandOf<"session.respond">): Promise<void> {
     try {
       await this.get(cmd.sessionId).session.respond(cmd.requestId, cmd.response);

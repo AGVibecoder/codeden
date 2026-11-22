@@ -255,7 +255,25 @@ export function AutonomySettings() {
         <span className="text-2xs text-muted-foreground">Always ask</span>
       </SettingRow>
       <WritableFoldersRow />
+      <PluginsOnDemandRow />
     </SettingsSection>
+  );
+}
+
+/** The plugin hub (§12.4): the user's MCP servers stay off until an agent needs one. */
+function PluginsOnDemandRow() {
+  const { settings, update } = useSettings();
+  return (
+    <SettingRow
+      label="Plugins on demand"
+      help="Your MCP servers (such as Unreal) stay off and cost no tokens until a worker needs one: it switches the plugin on, CodeDen opens its program if it has a start command, and the worker switches it off when it's done. Works for Claude Code workers; new sessions and the next time a session starts."
+    >
+      <Switch
+        aria-label="Plugins on demand"
+        checked={settings.plugins.onDemand}
+        onCheckedChange={(onDemand) => update({ plugins: { onDemand } })}
+      />
+    </SettingRow>
   );
 }
 

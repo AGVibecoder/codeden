@@ -39,6 +39,13 @@ export const ProviderCapabilities = z.object({
    */
   liveAutonomy: z.boolean().optional(),
   /**
+   * The plugin hub (§12.4): sessions can start with only the MCP servers CodeDen passes
+   * (`SessionOptions.pluginsOnDemand`) and take plugins on and off while they run
+   * (`ProviderSession.setPlugins`). When false (or absent), the provider loads the user's MCP
+   * servers itself, as before.
+   */
+  livePlugins: z.boolean().optional(),
+  /**
    * The `read_only` permission level is enforced natively: no file edits, no writing shell
    * commands, no commits or pushes (§11.2). When false (or absent), sessions on this provider
    * cannot use `read_only`.
@@ -174,6 +181,8 @@ export const McpServerConfig = z.discriminatedUnion("transport", [
     transport: z.literal("http"),
     name: z.string(),
     url: z.url(),
+    /** Server-sent events instead of streamable HTTP (a plugin configured as `sse`). */
+    sse: z.boolean().optional(),
     headers: z.record(z.string(), z.string()).optional(),
     /** Max seconds one tool call may take (long-running tools such as `ask_user`). */
     toolTimeoutSec: z.int().positive().max(86_400).optional(),
@@ -242,6 +251,14 @@ export const SessionOptions = z.object({
    */
   forkFrom: z.string().min(1).optional(),
   mcpServers: z.array(McpServerConfig).default([]),
+  /**
+   * The plugin hub (§12.4): the session loads only `mcpServers`, never the MCP servers in the
+   * provider's own config files; those come one at a time through `setPlugins` when the agent
+   * asks. Ignored by providers without `capabilities.livePlugins`.
+   */
+  pluginsOnDemand: z.boolean().optional(),
+  /** With `pluginsOnDemand`: the plugins the agent had switched on, for a session reopened. */
+  plugins: z.array(McpServerConfig).max(32).optional(),
   /** Extra env vars for the agent process (CodeDen secrets are never included). */
   env: z.record(z.string(), z.string()).optional(),
   /**

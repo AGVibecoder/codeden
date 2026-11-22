@@ -32,6 +32,7 @@ import {
   OrchestrationService,
 } from "./orchestration/orchestration-service";
 import type { AutomationPort, GithubPort } from "./orchestration/ports";
+import { PluginHub } from "./plugins/hub";
 import { ProjectService } from "./projects/project-service";
 import { ProjectRedetector } from "./projects/redetector";
 import { ProviderHistoryService } from "./providers/history";
@@ -189,6 +190,8 @@ export interface AppServices {
   configFiles: ConfigFiles;
   /** Provider memory, skills, subagents and MCP servers (§12.4). */
   agentConfig: AgentConfigService;
+  /** The plugin hub: MCP servers agents switch on when they need them (§12.4). */
+  plugins: PluginHub;
   /** Orchestrator and PM sessions, digests, notices, conflicts (§8). */
   orchestration: OrchestrationService;
   /** GitHub connection, issue/PR sync, PRs and evidence (§9). */
@@ -258,6 +261,23 @@ export function createServices(opts: ServicesOptions): AppServices {
   const gitBroker =
     opts.gitBroker ??
     createGitBroker({ exec, token: async () => (await github.auth.token())?.value ?? null });
+  const plugins = new PluginHub({
+    repo: sessionRepo,
+    runner: opts.runner,
+    runners,
+    // Made with the services below; the hub only reads it when an agent calls it.
+    agentConfig: () => services.agentConfig,
+    onDemand: () => opts.settings.get().plugins.onDemand,
+    log: opts.log,
+  });
+  // A session that ends loses its plugins (and a program opened only for it closes).
+  opts.store.subscribe((events) => {
+    for (const e of events) {
+      if (e.type !== "session.updated" && e.type !== "session.created") continue;
+      const session = (e.payload as { session?: Session }).session;
+      if (session) plugins.onSessionStatus(session.id, session.status);
+    }
+  });
   const launcher = new SessionLauncher({
     repo: sessionRepo,
     projects,
@@ -273,6 +293,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     sandboxes,
     log: opts.log,
     writableFolders: () => opts.settings.get().autonomy.writableFolders,
+    plugins,
   });
   // Before the session service: a start in a project the start-up check hasn't reached checks it.
   const redetector = new ProjectRedetector({
@@ -560,6 +581,7 @@ export function createServices(opts: ServicesOptions): AppServices {
       home: userHome,
       backupDir: join(opts.paths.backups, "files"),
     }),
+    plugins,
     agentConfig: new AgentConfigService({
       home: userHome,
       projects,

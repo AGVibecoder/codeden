@@ -10,6 +10,7 @@ import type {
   AgentEvent,
   AutonomyLevel,
   ItemOf,
+  McpServerConfig,
   RuntimeResponse,
   SessionOptions,
   UserInput,
@@ -26,7 +27,7 @@ import { ClaudeEventMapper } from "./mapper";
 import { ClaudeMcpConfig } from "./mcp-config";
 import { McpStatusRefresher } from "./mcp-refresh";
 import { claudeNotesDirs } from "./notes-dirs";
-import { buildQueryOptions, claudeEffort, toSdkUserMessage } from "./options";
+import { buildQueryOptions, claudeEffort, claudeMcpServers, toSdkUserMessage } from "./options";
 import { ClaudePolicy, permissionModeFor } from "./permissions";
 import { carriesToolResult, planApprovalItem, planDecision, planText } from "./plan-review";
 import { PlanUsageReader } from "./plan-usage";
@@ -104,7 +105,6 @@ export class ClaudeSession implements ProviderSession {
   private readonly mcpStatus = new McpStatusRefresher({
     read: () => this.q?.mcpServerStatus(),
     report: (list) => this.mapper.reportMcpServers(list),
-    reconnect: (name) => this.q?.reconnectMcpServer(name),
   });
 
   constructor(
@@ -139,6 +139,8 @@ export class ClaudeSession implements ProviderSession {
     this.planMode = opts.planMode;
     this.policy.setPlanning(opts.planMode);
     this.mcpConfig = new ClaudeMcpConfig(opts);
+    // A session reopened keeps the plugins its agent had switched on.
+    if (opts.pluginsOnDemand && opts.plugins?.length) this.mcpConfig.setPlugins(opts.plugins);
     this.mapper.start(opts.resumeToken);
     this.ensureQuery();
   }
@@ -176,6 +178,25 @@ export class ClaudeSession implements ProviderSession {
     this.autonomy = level;
     this.policy.setAutonomy(level);
     if (!this.planMode) await this.applyPermissionMode();
+  }
+
+  /**
+   * The plugin hub (§12.4): replace the plugins the session has, live through the SDK's
+   * `setMcpServers` (CodeDen's own servers are always sent along, so they stay). Rejects with
+   * the provider's error when a plugin can't connect; the next query keeps the list either way.
+   */
+  async setPlugins(servers: McpServerConfig[]): Promise<void> {
+    this.mcpConfig.setPlugins(servers);
+    const q = this.q;
+    if (!q) return;
+    const result = await q.setMcpServers(claudeMcpServers(this.mcpConfig.servers()));
+    this.mcpStatus.refresh();
+    const failed = Object.entries(result.errors ?? {}).filter(([name]) =>
+      servers.some((s) => s.name === name),
+    );
+    if (failed.length > 0) {
+      throw new Error(failed.map(([name, error]) => `${name}: ${error}`).join("; "));
+    }
   }
 
   /** Writable folders for CodeDen's checks, from the next tool call. */

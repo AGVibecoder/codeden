@@ -35,7 +35,11 @@ export function claudeMcpServers(
   for (const server of servers) {
     out[server.name] =
       server.transport === "http"
-        ? { type: "http", url: server.url, ...(server.headers ? { headers: server.headers } : {}) }
+        ? {
+            type: server.sse ? "sse" : "http",
+            url: server.url,
+            ...(server.headers ? { headers: server.headers } : {}),
+          }
         : {
             type: "stdio",
             command: server.command,
@@ -136,6 +140,9 @@ export function buildQueryOptions(input: QueryOptionsInput): Options {
     // Read-only sessions (orchestrator, PMs) never get the edit tools (§11.2).
     ...(session.readOnly ? { disallowedTools: [...EDIT_TOOLS] } : {}),
     ...mcpConfigArgs(input),
+    // The plugin hub: only the servers CodeDen passes, never those in Claude's config files,
+    // which the agent switches on one at a time (`setPlugins`).
+    ...(session.pluginsOnDemand ? { strictMcpConfig: true } : {}),
     ...trustedMcpTools(session.mcpServers),
     systemPrompt: {
       type: "preset",
