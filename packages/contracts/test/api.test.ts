@@ -21,6 +21,8 @@ import {
   LoginToolId,
   REVIEW_FOCUS_MAX,
   RefreshModelsResponse,
+  RemoveProjectRequest,
+  RemoveProjectResponse,
   ReorderProjectsRequest,
   RestoreInboxRequest,
   RestoreInboxResponse,
@@ -408,6 +410,20 @@ describe("api schemas", () => {
     roundTrip(ReorderProjectsRequest, { projectIds: [] });
     expect(() => ReorderProjectsRequest.parse({ projectIds: [""] })).toThrow();
     expect(() => ReorderProjectsRequest.parse({})).toThrow();
+  });
+
+  it("parses removing a project, with or without its folder", () => {
+    expect(RemoveProjectRequest.parse({})).toEqual({ deleteFolder: false });
+    roundTrip(RemoveProjectRequest, { deleteFolder: true });
+    expect(() => RemoveProjectRequest.parse({ deleteFolder: "yes" })).toThrow();
+    roundTrip(RemoveProjectResponse, {
+      path: "E:\\PROJECTS\\app",
+      deletedFolder: true,
+      sessions: 3,
+    });
+    expect(() =>
+      RemoveProjectResponse.parse({ path: "x", deletedFolder: true, sessions: -1 }),
+    ).toThrow();
   });
 
   it("pages a project's archived sessions (#323)", () => {

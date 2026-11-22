@@ -11,6 +11,7 @@ import { useLayoutStore } from "@/stores/layout";
 import { childGroup, childRow, NavRow, rowBase, useIsActive } from "./nav-row";
 import { ProjectAutomations } from "./project-automations";
 import { type GroupPosition, useProjectMenu } from "./project-menu";
+import { RemoveProjectDialog } from "./remove-project-dialog";
 import { RowMenu, RowMenuButton, useRowMenu } from "./row-menu";
 import { SessionRow } from "./session-row";
 
@@ -73,7 +74,8 @@ export function ProjectGroup({
   const [showAll, setShowAll] = useState(false);
   const homeActive = useIsActive(`/projects/${project.id}`, false);
   const menu = useRowMenu();
-  const entries = useProjectMenu(project, position);
+  const [removing, setRemoving] = useState(false);
+  const entries = useProjectMenu(project, position, () => setRemoving(true));
   const pm = sessions
     .filter((s) => s.role === "pm")
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
@@ -158,6 +160,7 @@ export function ProjectGroup({
           </div>
         </div>
       </RowMenu>
+      <RemoveProjectDialog project={project} open={removing} onOpenChange={setRemoving} />
 
       {open && (
         <div className={childGroup}>

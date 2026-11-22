@@ -7,6 +7,8 @@ import {
   type PublishGithubPlan,
   PublishGithubRequest,
   type PublishGithubResponse,
+  RemoveProjectRequest,
+  type RemoveProjectResponse,
   ReorderProjectsRequest,
   type SessionFileList,
   type SlashCommandList,
@@ -21,8 +23,8 @@ import { archivedSessionsPage } from "../services/sessions/archived";
 import { jsonBody, queryOf } from "./validate";
 
 /**
- * `/api/projects`: add from a folder or clone, list, reorder, update (and pin), archive, and
- * re-detect the folder's git checkout and GitHub remote (`refresh`, `disconnect-github`).
+ * `/api/projects`: add from a folder or clone, list, reorder, update (and pin), archive, remove
+ * (with its folder when asked), and re-detect the folder's git checkout and GitHub remote (`refresh`, `disconnect-github`).
  * `sessions/archived` pages through the project's archived sessions (the snapshot carries only
  * the recent ones).
  * `commands` and `files` feed the composer's `/` and `@` menus in the New session draft, before
@@ -78,6 +80,11 @@ export function projectRoutes(s: AppServices) {
     .post("/:id/publish-github", jsonBody(PublishGithubRequest), async (c) =>
       c.json<PublishGithubResponse>(
         await s.githubPublisher.publish(c.req.param("id"), c.req.valid("json")),
+      ),
+    )
+    .post("/:id/remove", jsonBody(RemoveProjectRequest), async (c) =>
+      c.json<RemoveProjectResponse>(
+        await s.projectRemover.remove(c.req.param("id"), c.req.valid("json")),
       ),
     )
     .delete("/:id", (c) => {

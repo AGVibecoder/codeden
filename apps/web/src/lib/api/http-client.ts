@@ -24,6 +24,7 @@ import {
   RefreshModelsResponse,
   RefreshProjectResponse,
   RemoteImageGrant,
+  RemoveProjectResponse,
   ReorderProjectsResponse,
   RestoreFilesResponse,
   RestoreInboxResponse,
@@ -198,6 +199,8 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
       get(`/projects/${enc(id)}/publish-github`, (v) => PublishGithubPlan.parse(v)),
     publishGithub: (id, req) =>
       post(`/projects/${enc(id)}/publish-github`, req, (v) => PublishGithubResponse.parse(v)),
+    removeProject: (id, req) =>
+      post(`/projects/${enc(id)}/remove`, req, (v) => RemoveProjectResponse.parse(v)),
     automations: httpAutomationsApi(http),
     factory: httpFactoryApi(http),
 

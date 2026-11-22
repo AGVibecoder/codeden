@@ -74,6 +74,8 @@ CodeDen then opens the new project's **New session** view, ready for your first 
 
 New projects get the **starter set** of automations added, all switched **off**. Turn on the ones you want later (see [Automations](automations.md)).
 
+To get rid of a project, right-click it in the sidebar (or use its **⋯** button) and choose **Remove project**. Its sessions stop and are archived, the project leaves CodeDen, and **its folder is deleted from disk**, permanently; the confirmation names the folder. A drive root, your home folder, CodeDen's own data folder and a folder that holds (or lies inside) another project are never deleted.
+
 ### Optional: `.codeden/project.json`
 
 Commit this file to tell CodeDen how to prepare a fresh worktree:

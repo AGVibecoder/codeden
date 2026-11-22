@@ -108,6 +108,25 @@ export const PublishGithubResponse = z.object({ project: Project, url: z.string(
 export type PublishGithubResponse = z.infer<typeof PublishGithubResponse>;
 
 /**
+ * `POST /api/projects/:id/remove` body (§9): take the project out of CodeDen. Its sessions are
+ * stopped and archived and their worktrees removed. With `deleteFolder` the project's folder
+ * and everything in it are deleted from disk as well, permanently.
+ */
+export const RemoveProjectRequest = z.object({ deleteFolder: z.boolean().default(false) });
+export type RemoveProjectRequest = z.infer<typeof RemoveProjectRequest>;
+
+/** `POST /api/projects/:id/remove` response: what was removed. */
+export const RemoveProjectResponse = z.object({
+  /** The project's folder. */
+  path: z.string(),
+  /** True when the folder was deleted from disk. */
+  deletedFolder: z.boolean(),
+  /** Sessions that were stopped and archived. */
+  sessions: z.number().int().nonnegative(),
+});
+export type RemoveProjectResponse = z.infer<typeof RemoveProjectResponse>;
+
+/**
  * `GET /api/projects/:id/checks` response: the project's checks (§9 Project checks) as a new
  * session would freeze them now, read from `.codeden/project.json` in the project's own folder.
  * Empty when the file is missing, invalid or has none, so the UI offers "Keep going until
