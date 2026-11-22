@@ -140,6 +140,8 @@ export class ProjectService {
     if (patch.pinned !== undefined) next.pinned = patch.pinned;
     // Applies to agent sessions opened from now on; running ones keep the environment they have.
     if (patch.agentCiEnv !== undefined) next.agentCiEnv = patch.agentCiEnv;
+    // Applies to GitHub activity from now on and to whatever the PM has not seen yet.
+    if (patch.githubUpdates !== undefined) next.githubUpdates = patch.githubUpdates;
     // Applies to sessions started from now on; running ones stay where they run.
     if (patch.execution !== undefined) {
       if (patch.execution.backend === "docker" && current.kind !== "github") {
@@ -316,6 +318,7 @@ export class ProjectService {
       timezone: null,
       agentCiEnv: true,
       execution: { backend: "local" as const },
+      githubUpdates: "important" as const,
       pinned: false,
       sortOrder: this.nextSortOrder(),
       createdAt: now,

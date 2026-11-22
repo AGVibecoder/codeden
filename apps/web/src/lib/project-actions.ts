@@ -1,4 +1,9 @@
-import type { Project, ProjectExecutionBackend, Snapshot } from "@codeden/contracts";
+import type {
+  GithubUpdatesLevel,
+  Project,
+  ProjectExecutionBackend,
+  Snapshot,
+} from "@codeden/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "sonner";
@@ -14,8 +19,8 @@ export type ProjectSessionDefaults =
   | Pick<Project, "autonomy">;
 
 /**
- * Pin, unpin and reorder projects (§13), set their defaults for new sessions, and turn
- * `CI=true` in their agent sessions on or off (§4.2). Changes apply to the snapshot at once and
+ * Pin, unpin and reorder projects (§13), set their defaults for new sessions, turn `CI=true` in
+ * their agent sessions on or off (§4.2) and choose which GitHub activity reaches their PM. Changes apply to the snapshot at once and
  * are rolled back with a toast if the server rejects them; the server's event then confirms them.
  */
 export function useProjectActions() {
@@ -113,6 +118,24 @@ export function useProjectActions() {
         } catch (error) {
           set(project.execution?.backend ?? "local");
           toast.error(`Couldn't change where ${project.name}'s sessions run`, {
+            description: message(error),
+          });
+          return false;
+        }
+      },
+      /** Which GitHub activity wakes the project's PM and reaches its chat. */
+      setGithubUpdates: async (project: Project, githubUpdates: GithubUpdatesLevel) => {
+        const set = (value: GithubUpdatesLevel) =>
+          setProjects((list) =>
+            list.map((p) => (p.id === project.id ? { ...p, githubUpdates: value } : p)),
+          );
+        set(githubUpdates);
+        try {
+          await client.updateProject(project.id, { githubUpdates });
+          return true;
+        } catch (error) {
+          set(project.githubUpdates);
+          toast.error(`Couldn't change ${project.name}'s GitHub updates`, {
             description: message(error),
           });
           return false;

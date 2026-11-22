@@ -216,6 +216,7 @@ export const sampleProject: Project = {
   timezone: null,
   agentCiEnv: true,
   execution: { backend: "local" },
+  githubUpdates: "important",
   pinned: false,
   sortOrder: 0,
   createdAt: ts,

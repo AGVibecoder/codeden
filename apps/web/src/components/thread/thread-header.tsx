@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { StatusDot } from "@/components/common/status-dot";
+import { GithubUpdatesChip } from "@/components/orchestration/github-updates";
 import { ReadOnlyBadge, RoleBadge } from "@/components/orchestration/role-badge";
 import { MobileNavButton } from "@/components/shell/mobile-nav";
 import { Button } from "@/components/ui/button";
@@ -186,6 +187,9 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
         {/* Agents show their model and permissions under the message box; the PM and the
             orchestrator have no permission picker there, so their read-only badge stays. */}
         {session.role !== "agent" && <ReadOnlyBadge />}
+        {session.role === "pm" && project?.kind === "github" && (
+          <GithubUpdatesChip project={project} />
+        )}
         <SessionGithubBadges session={session} className="hidden @[44rem]:inline-flex" />
       </div>
 

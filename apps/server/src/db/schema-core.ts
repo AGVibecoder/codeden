@@ -79,6 +79,10 @@ export const projects = sqliteTable(
     executionBackend: text("execution_backend", { enum: ["local", "docker"] })
       .notNull()
       .default("local"),
+    /** Which GitHub activity reaches the PM (`Project.githubUpdates`). */
+    githubUpdates: text("github_updates", { enum: ["off", "digest", "important", "all"] })
+      .notNull()
+      .default("important"),
     pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
     /** Manual list position (§13); the migration backfills it from the alphabetical order. */
     sortOrder: integer("sort_order").notNull().default(0),

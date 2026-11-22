@@ -1,4 +1,5 @@
 import {
+  GITHUB_NOTICE_TYPES,
   type ItemOf,
   NOTICE_BATCH_CODE,
   type Notice,
@@ -9,11 +10,13 @@ import { Link } from "@tanstack/react-router";
 import {
   AlarmClock,
   ArrowUpRight,
+  BellOff,
   CheckCircle2,
   CircleDot,
   Factory,
   GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
   type LucideIcon,
   MessageCircleQuestion,
   MessageSquare,
@@ -24,9 +27,13 @@ import {
   Unplug,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
+import { githubUpdatesLabel, quieterLevel } from "@/components/orchestration/github-updates";
 import { ProjectTile } from "@/components/shell/sidebar/project-group";
+import { Button } from "@/components/ui/button";
 import { ago } from "@/lib/format";
 import { platform } from "@/lib/platform";
+import { useProjectActions } from "@/lib/project-actions";
 import { useProject } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +56,7 @@ const look: Record<NoticeType, { icon: LucideIcon; tone: string; label: string }
   "pr.checks_failed": { icon: XCircle, tone: "text-status-failed", label: "Checks failed" },
   "pr.checks_passed": { icon: CheckCircle2, tone: "text-status-done", label: "Checks passed" },
   "pr.merged": { icon: GitMerge, tone: "text-chart-4", label: "Merged" },
+  "pr.conflicting": { icon: GitPullRequestClosed, tone: "text-status-failed", label: "Conflicts" },
   "review.submitted": { icon: MessagesSquare, tone: "text-primary", label: "Review" },
   "issue.opened": { icon: CircleDot, tone: "text-status-done", label: "New issue" },
   "automation.skipped": { icon: SkipForward, tone: "text-muted-foreground", label: "Skipped" },
@@ -158,15 +166,51 @@ function NoticeRow({ notice }: { notice: Notice }) {
   );
 }
 
+/**
+ * "Mute these" on a batch with GitHub updates: one step quieter for the project (All to
+ * Important, Important to Digest), with Undo in the toast.
+ */
+function MuteGithubButton({ projectId }: { projectId: string }) {
+  const project = useProject(projectId);
+  const { setGithubUpdates } = useProjectActions();
+  if (project?.kind !== "github") return null;
+  const next = quieterLevel(project.githubUpdates);
+  if (!next) return null;
+  const mute = async () => {
+    if (!(await setGithubUpdates(project, next))) return;
+    toast(`GitHub updates for ${project.name}: ${githubUpdatesLabel(next)}`, {
+      action: {
+        label: "Undo",
+        onClick: () => void setGithubUpdates(project, project.githubUpdates),
+      },
+    });
+  };
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="-my-1 ml-auto h-5 gap-1 px-1.5 text-3xs font-medium tracking-normal normal-case"
+      title={`Set GitHub updates for ${project.name} to ${githubUpdatesLabel(next)}`}
+      onClick={() => void mute()}
+    >
+      <BellOff className="size-3" /> Mute these
+    </Button>
+  );
+}
+
 /** Notices delivered with a wake (§8.2), rendered as compact typed cards. */
 export function NoticeBatchCard({ notices }: { notices: Notice[] }) {
+  const githubProject = notices.find(
+    (n) => GITHUB_NOTICE_TYPES.has(n.type) && n.projectId,
+  )?.projectId;
   return (
     <div
       className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border bg-card"
       data-testid="notice-batch"
     >
-      <div className="bg-muted/30 px-3 py-1.5 text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
+      <div className="flex items-center bg-muted/30 px-3 py-1.5 text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
         {notices.length} {notices.length === 1 ? "update" : "updates"} since the last turn
+        {githubProject && <MuteGithubButton projectId={githubProject} />}
       </div>
       {notices.map((n) => (
         <NoticeRow key={n.id} notice={n} />

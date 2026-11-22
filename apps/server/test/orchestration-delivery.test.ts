@@ -14,6 +14,7 @@ import { EventStore } from "../src/events/store";
 import { askMarker, PmAsks } from "../src/services/orchestration/asks";
 import { NoticeCards } from "../src/services/orchestration/cards";
 import { NoticeDelivery } from "../src/services/orchestration/delivery";
+import type { NoticePresentation } from "../src/services/orchestration/github-level";
 import { type NoticeDraft, NoticeStore } from "../src/services/orchestration/notices";
 import { SessionRepo } from "../src/services/sessions/repo";
 import { sampleSession } from "./helpers";
@@ -84,7 +85,9 @@ const pmMessage = (id: string, informational: boolean, over: Partial<NoticeDraft
     ...over,
   }) as NoticeDraft;
 
-function delivery(opts: { retryDelaysMs?: number[] } = {}) {
+function delivery(
+  opts: { retryDelaysMs?: number[]; presentation?: (n: Notice) => NoticePresentation } = {},
+) {
   const request = vi.fn();
   const d = new NoticeDelivery({
     db: database.db,
@@ -92,6 +95,7 @@ function delivery(opts: { retryDelaysMs?: number[] } = {}) {
     cards: new NoticeCards(store),
     wakes: { request },
     digestFor: () => "<codeden_status>digest</codeden_status>",
+    presentation: opts.presentation ?? (() => "live"),
     projectName: () => "Shop",
     session: (id) => repo.find(id)?.session,
     projectIds: () => ["p1", "p2"],
@@ -103,6 +107,40 @@ function delivery(opts: { retryDelaysMs?: number[] } = {}) {
 const ids = (list: Notice[]) => list.map((n) => n.id);
 
 describe("notice delivery (§8.2)", () => {
+  it("summarizes GitHub activity the level keeps out of the chat, and drops hidden ones", () => {
+    notices.create(finished("live"));
+    const issue = (id: string, number: number) =>
+      ({
+        id,
+        type: "issue.opened",
+        projectId: "p1",
+        target: "pm",
+        sessionId: null,
+        title: `Issue #${number} opened`,
+        data: {
+          issue: { number, url: `https://github.com/o/r/issues/${number}` },
+          author: "x",
+          labels: [],
+        },
+      }) as NoticeDraft;
+    notices.create(issue("sum", 7));
+    notices.create(issue("hid", 8));
+    const where: Record<string, NoticePresentation> = { sum: "summary", hid: "hidden" };
+    const add = vi.spyOn(NoticeCards.prototype, "add");
+    const { d } = delivery({ presentation: (n) => where[n.id] ?? "live" });
+
+    const turn = d.decorate(pm, { text: "wake", attachments: [] });
+    expect(turn.input.text).toContain("Summary of live");
+    expect(turn.input.text).toContain("1 issue opened (#7)");
+    expect(turn.input.text).not.toContain("Issue #7 opened");
+    expect(turn.input.text).not.toContain("#8");
+    turn.delivered?.();
+    expect(notices.undelivered("pm", "p1")).toEqual([]);
+    // Only the live notice becomes a card in the chat.
+    expect(add.mock.calls.map(([, list]) => ids(list))).toEqual([["live"]]);
+    add.mockRestore();
+  });
+
   it("marks notices delivered only once the turn carrying them was sent", () => {
     notices.create(finished("n1"));
     notices.create(finished("n2"));

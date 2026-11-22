@@ -12,7 +12,7 @@ import {
   Timestamp,
 } from "./common";
 import { InboxItem, InboxItemKind, InboxItemStatus } from "./entities/inbox";
-import { GitHubRepo, Project } from "./entities/project";
+import { GitHubRepo, GithubUpdatesLevel, Project } from "./entities/project";
 import { ItemRecord, Session, SessionStatus, Thread, Turn } from "./entities/session";
 import { ProjectExecutionBackend } from "./execution";
 import { UserInput } from "./input";
@@ -110,6 +110,8 @@ export const UpdateProjectRequest = z.object({
    * isn't on GitHub and while Docker isn't available, with the reason.
    */
   execution: z.object({ backend: ProjectExecutionBackend }).optional(),
+  /** Which GitHub activity wakes the PM and reaches its chat (`Project.githubUpdates`). */
+  githubUpdates: GithubUpdatesLevel.optional(),
 });
 export type UpdateProjectRequest = z.infer<typeof UpdateProjectRequest>;
 

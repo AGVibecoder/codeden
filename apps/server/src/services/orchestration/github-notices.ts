@@ -15,6 +15,7 @@ export const GITHUB_NOTICE_EVENTS = new Set([
   "pr.checks_failed",
   "pr.checks_passed",
   "pr.merged",
+  "pr.updated",
   "issue.opened",
   "review.submitted",
 ]);
@@ -36,7 +37,8 @@ function failedChecks(pr: GithubPr): string[] {
  * Typed PM notices for GitHub sync events. A PR owned by a CodeDen session wakes the PM the way
  * that session's own notices do (`wakesPm`); for other PRs, opened PRs and reviews wake the PM
  * while check results and merges only show up in its next digest. New issues always wake it,
- * so it can triage them. Ids derive from the event source, so a repeated sync adds nothing.
+ * so it can triage them. A merge conflict is news only on a PR a CodeDen session opened. The
+ * project's GitHub updates level (`github-level.ts`) then decides what reaches the PM. Ids derive from the event source, so a repeated sync adds nothing.
  * A review from someone without write access (neither the account it was read with nor one of
  * the project's `trustedAuthors`) carries no body and doesn't wake the PM: on a public
  * repository anyone can review.
@@ -69,10 +71,11 @@ export function deriveGithubNotices(
       });
       continue;
     }
-    const { pr, review, viewer } = e.payload as {
+    const { pr, review, viewer, changes } = e.payload as {
       pr: GithubPr;
       review?: GithubReview;
       viewer?: string | null;
+      changes?: string[];
     };
     const owner = pr.sessionId ? session(pr.sessionId) : undefined;
     const ownerWakes = owner ? wakesPm(owner) : null;
@@ -124,6 +127,19 @@ export function deriveGithubNotices(
             type: "pr.merged",
             title: `PR #${pr.number} merged: ${pr.title}`,
             data: { sessionId: pr.sessionId, pr: prRef(pr), linkedIssues: pr.linkedIssues },
+          },
+        });
+        break;
+      case "pr.updated":
+        if (!owner || pr.mergeable !== "conflicting" || !changes?.includes("mergeable")) break;
+        out.push({
+          wake: wakesPm(owner),
+          notice: {
+            ...common,
+            id: `pr.conflicting:${pr.projectId}:${pr.number}:${head}`,
+            type: "pr.conflicting",
+            title: `PR #${pr.number} has merge conflicts: ${pr.title}`,
+            data: { sessionId: pr.sessionId, pr: prRef(pr) },
           },
         });
         break;

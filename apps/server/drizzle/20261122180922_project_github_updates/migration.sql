@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `github_updates` text DEFAULT 'important' NOT NULL;

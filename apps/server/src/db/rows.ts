@@ -53,6 +53,7 @@ export function projectToRow(p: Project): ProjectRow {
     agentCiEnv: p.agentCiEnv,
     // Events written before the setting existed carry none: those projects run locally.
     executionBackend: p.execution?.backend ?? "local",
+    githubUpdates: p.githubUpdates,
     pinned: p.pinned,
     sortOrder: p.sortOrder,
     github: p.kind === "github" ? p.github : null,

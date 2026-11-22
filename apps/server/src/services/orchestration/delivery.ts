@@ -13,6 +13,7 @@ import { errorMessage } from "../errors";
 import type { DecoratedInput } from "../sessions/input-decorator";
 import type { NoticeCards } from "./cards";
 import { renderNotices } from "./digest";
+import { type NoticePresentation, renderGithubSummary } from "./github-level";
 import type { NoticeStore } from "./notices";
 import type { WakeScheduler } from "./wake-scheduler";
 
@@ -23,6 +24,8 @@ export interface NoticeDeliveryDeps {
   wakes: Pick<WakeScheduler, "request">;
   /** The status digest for a role session's next turn. */
   digestFor: (session: Session) => string;
+  /** Where a notice goes in its target's turn (the project's GitHub updates level). */
+  presentation: (notice: Notice) => NoticePresentation;
   projectName: (id: string) => string;
   session: (id: string) => Session | undefined;
   /** The projects whose PMs may be woken (not archived). */
@@ -41,6 +44,11 @@ export function wakesTarget(n: Notice): boolean {
   if (n.wake !== undefined) return n.wake;
   return !(n.type === "pm.message" && n.data.informational);
 }
+
+/** Notices read per turn: enough that a pile of summary-only ones never hides live ones. */
+export const UNDELIVERED_SCAN = 1000;
+/** Live notices in one turn; more wait for the next. */
+const MAX_LIVE = 50;
 
 const keyOf = (session: Session) =>
   session.role === "pm" ? `pm:${session.projectId}` : "orchestrator";
@@ -71,13 +79,21 @@ export class NoticeDelivery {
         .undelivered(
           session.role === "pm" ? "pm" : "orchestrator",
           session.role === "pm" ? session.projectId : null,
+          UNDELIVERED_SCAN,
         )
         .filter((n) => !this.claimed.has(n.id));
-      parts.push(...(pending.length > 0 ? [renderNotices(pending, this.deps.projectName)] : []));
+      const where = (kind: NoticePresentation) =>
+        pending.filter((n) => this.deps.presentation(n) === kind);
+      // Live notices in full (and as cards), the rest of the GitHub activity as one summary;
+      // hidden ones (GitHub updates off) only count as delivered.
+      const live = where("live").slice(0, MAX_LIVE);
+      const summary = where("summary");
+      if (live.length > 0) parts.push(renderNotices(live, this.deps.projectName));
+      if (summary.length > 0) parts.push(renderGithubSummary(summary));
       parts.push(input.text);
-      const ids = pending.map((n) => n.id);
+      const ids = [...live, ...summary, ...where("hidden")].map((n) => n.id);
       for (const id of ids) this.claimed.add(id);
-      if (pending.length > 0) this.deps.cards.add(session.id, pending);
+      if (live.length > 0) this.deps.cards.add(session.id, live);
       const release = () => {
         for (const id of ids) this.claimed.delete(id);
       };

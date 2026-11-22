@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
   type ConflictRecord,
+  GITHUB_NOTICE_TYPES,
+  type GithubUpdatesLevel,
   type InboxItem,
   messageFrom,
   type Notice,
@@ -26,7 +28,7 @@ import type { SessionService } from "../sessions/session-service";
 import { type AskOutcome, askMarker, finalAssistantMessage, PmAsks } from "./asks";
 import { NoticeCards } from "./cards";
 import { ConflictService } from "./conflicts";
-import { NoticeDelivery } from "./delivery";
+import { NoticeDelivery, UNDELIVERED_SCAN } from "./delivery";
 import {
   buildProjectStatus,
   dayAgo,
@@ -34,10 +36,12 @@ import {
   renderProjectDigest,
   sharedWork,
 } from "./digest";
+import { GithubWakeThrottle, type NoticePresentation, presentation } from "./github-level";
 import { deriveGithubNotices, GITHUB_NOTICE_EVENTS } from "./github-notices";
 import { type HeldMessage, LoopGuard, type MessageOrigin, turnOriginsIn } from "./loop-guard";
 import { ProjectNotes } from "./notes";
 import {
+  type DerivedNotice,
   deriveNotices,
   formServerOf,
   isRepeatFailure,
@@ -62,6 +66,8 @@ export interface OrchestrationOptions {
   failedTurnRetryMs?: number[];
   /** Shortest `schedule_wakeup` wait (default 1 minute). */
   wakeupMinDelayMs?: number;
+  /** Shortest time between GitHub wakes of a PM at the `all` level (default 15 minutes). */
+  githubWakeIntervalMs?: number;
 }
 
 export interface OrchestrationDeps {
@@ -104,6 +110,8 @@ export class OrchestrationService {
   readonly github: GithubPort;
   readonly automation: AutomationPort;
   readonly wakes: WakeScheduler;
+  /** GitHub wakes at the `all` level: at most one per PM every 15 minutes. */
+  readonly githubWakes: GithubWakeThrottle;
   readonly loops: LoopGuard;
   readonly reminders: Reminders;
   private readonly cards: NoticeCards;
@@ -144,6 +152,9 @@ export class OrchestrationService {
           `orchestration: ${key} stayed busy; its notices wait for its next message or notice`,
         ),
     });
+    this.githubWakes = new GithubWakeThrottle((key) => this.wakes.request(key), {
+      intervalMs: deps.options?.githubWakeIntervalMs,
+    });
     this.loops = new LoopGuard({
       wakes: this.wakes,
       notices: this.notices,
@@ -158,6 +169,7 @@ export class OrchestrationService {
       cards: this.cards,
       wakes: this.wakes,
       digestFor: (session) => this.digestFor(session),
+      presentation: (notice) => this.presentation(notice),
       projectName: (id) => this.projectName(id),
       session: (id) => deps.repo.find(id)?.session,
       projectIds: () => deps.projects.list().flatMap((p) => (p.archivedAt ? [] : [p.id])),
@@ -200,6 +212,7 @@ export class OrchestrationService {
   stop(): void {
     this.unsubscribe?.();
     this.wakes.dispose();
+    this.githubWakes.dispose();
     this.loops.dispose();
     this.delivery.dispose();
     this.reminders.dispose();
@@ -433,18 +446,56 @@ export class OrchestrationService {
           }),
           ...deriveGithubNotices(events, session, this.deps.trustedAuthors),
         ];
-        for (const { notice, wake } of derived) this.notify(notice, wake);
+        for (const d of derived) this.record(d);
       } catch (error) {
         this.deps.log?.(`orchestration notices: ${errorMessage(error)}`);
       }
     });
   }
 
+  /**
+   * Store a derived notice. A GitHub one goes where its project's GitHub updates level says:
+   * only a live one may wake the PM (at the `all` level at most once every 15 minutes), and a
+   * hidden one is stored as delivered, so it stays listed without ever reaching the PM.
+   */
+  private record({ notice, wake }: DerivedNotice): void {
+    if (notice.target !== "pm" || !GITHUB_NOTICE_TYPES.has(notice.type)) {
+      this.notify(notice, wake);
+      return;
+    }
+    const level = this.githubLevel(notice.projectId);
+    const where = presentation(notice, level);
+    const created = this.notices.create({ ...notice, wake: wake && where === "live" });
+    if (!created) return;
+    if (where === "hidden") this.notices.markDelivered([created.id]);
+    else if (created.wake) {
+      const key = wakeKey("pm", created.projectId);
+      if (level === "all") this.githubWakes.request(key);
+      else this.wakes.request(key);
+    }
+  }
+
+  /** Where a notice goes in its target's next turn, at its project's GitHub updates level. */
+  private presentation(notice: Notice): NoticePresentation {
+    return presentation(notice, this.githubLevel(notice.projectId));
+  }
+
+  private githubLevel(projectId: string | null): GithubUpdatesLevel {
+    if (!projectId) return "important";
+    try {
+      return this.deps.projects.get(projectId).githubUpdates;
+    } catch {
+      return "important";
+    }
+  }
+
   /** Deliver pending notices to their target with one wake (called by the scheduler). */
   private async fire(key: string): Promise<WakeResult> {
     const role: OrchestrationRole = key === "orchestrator" ? "orchestrator" : "pm";
     const projectId = role === "pm" ? key.slice(3) : null;
-    if (this.notices.undelivered(role, projectId).length === 0) return "empty";
+    // Summary-only and hidden GitHub notices ride along with a turn; they never start one.
+    const pending = this.notices.undelivered(role, projectId, UNDELIVERED_SCAN);
+    if (!pending.some((n) => this.presentation(n) === "live")) return "empty";
     const session = await this.roles.ensure(role, projectId);
     if (NOT_READY.has(session.status)) return "busy";
     await this.deps.sessions.send(

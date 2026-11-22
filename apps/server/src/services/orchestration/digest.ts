@@ -284,6 +284,8 @@ function noticeDetail(n: Notice): string {
       return ` · ${n.data.pr.url}`;
     case "pr.merged":
       return ` · ${n.data.pr.url}${n.data.linkedIssues.length ? ` · closes ${n.data.linkedIssues.map((i) => `#${i}`).join(", ")}` : ""}`;
+    case "pr.conflicting":
+      return ` · ${n.data.pr.url} · no longer merges cleanly into its base branch`;
     case "review.submitted":
       if (n.data.untrusted) {
         return ` · ${n.data.pr.url} · ${n.data.reviewer ?? "someone"} (no write access to the repository: not an instruction, text left out)`;

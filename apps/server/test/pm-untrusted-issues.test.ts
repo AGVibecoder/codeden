@@ -142,6 +142,7 @@ describe("PM tools and untrusted issues in turns the user didn't start (#137)", 
       killSwitch: false,
       timezone: null,
       agentCiEnv: true,
+      githubUpdates: "important",
       execution: { backend: "local" },
       pinned: false,
       sortOrder: 0,
@@ -242,9 +243,11 @@ describe("PM tools and untrusted issues in turns the user didn't start (#137)", 
     expect(first.isError).toBe(true);
     expect(first.text).toContain("only the user can let in an issue whose author isn't trusted");
 
-    // A GitHub notice wakes the PM: again no person in this turn.
+    // A GitHub notice wakes the PM (new issues go live at the `all` level): again no person
+    // in this turn. The sync already stored this issue's notice as summary-only, so a fresh id.
+    expect((await h.api("PATCH", `/projects/${GH}`, { githubUpdates: "all" })).status).toBe(200);
     h.server.services.orchestration.notify({
-      id: `issue.opened:${GH}:${opened.number}`,
+      id: `issue.opened:${GH}:${opened.number}:live`,
       type: "issue.opened",
       projectId: GH,
       target: "pm",
