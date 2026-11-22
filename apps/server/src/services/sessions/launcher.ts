@@ -212,7 +212,9 @@ export class SessionLauncher {
     }
     const runner = runnerForSession(this.deps, session.id);
     await this.requireRunner(runner);
-    const { session: current, setupNote } = await this.restoreWorktree(session);
+    const { session: current, setupNote } = await this.restoreWorktree(
+      this.followOrchestratorDir(session),
+    );
     const brief = this.pendingBrief(session.id);
     const first = brief ? withHandoffBrief(brief, input) : input;
     const result = await this.open(runner, current, withSetupNote(first, setupNote));
@@ -222,6 +224,20 @@ export class SessionLauncher {
       resumeToken: result.resumeToken ?? s.resumeToken,
       runnerId: runner.runnerId() ?? s.runnerId,
     }));
+  }
+
+  /**
+   * A session without a project (the orchestrator) works in CodeDen's own folder, which moves
+   * with CodeDen's home (`CODEDEN_HOME`). One stored at the old place reopens at the current
+   * one instead of failing because its folder is gone.
+   */
+  private followOrchestratorDir(session: Session): Session {
+    if (session.projectId || session.cwd === this.deps.orchestratorDir) return session;
+    mkdirSync(this.deps.orchestratorDir, { recursive: true });
+    this.deps.log?.(
+      `session ${session.id}: moved from ${session.cwd} to ${this.deps.orchestratorDir}`,
+    );
+    return this.deps.repo.update(session.id, (s) => ({ ...s, cwd: this.deps.orchestratorDir }));
   }
 
   /**
