@@ -87,6 +87,21 @@ function setup() {
 }
 
 describe("VoiceCall", () => {
+  it("reports that it is listening as soon as it starts, before any words", () => {
+    const { engine } = fakeEngine();
+    const states: CallState[] = [];
+    const call = new VoiceCall({
+      engine,
+      send: async () => {},
+      watchReplies: () => () => {},
+      speak: async () => {},
+      onState: (s) => states.push(s),
+    });
+    call.start();
+    expect(states[0]?.phase).toBe("listening");
+    call.hangUp();
+  });
+
   it("sends each pause straight away and keeps the microphone on", async () => {
     const { call, engine, say, time, sent } = setup();
     call.start();
