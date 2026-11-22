@@ -51,6 +51,16 @@ export function NotificationSettings() {
         />
       </SettingRow>
       <SettingRow
+        label="When the orchestrator or a project manager replies"
+        help="A toast with the first line of the answer, and a desktop notification while CodeDen is in the background. Not for workers, and not for the chat you're looking at."
+      >
+        <Switch
+          aria-label="When the orchestrator or a project manager replies"
+          checked={settings.notifications.replies}
+          onCheckedChange={(replies) => update({ notifications: { replies } })}
+        />
+      </SettingRow>
+      <SettingRow
         label="Notify me about"
         help="For toasts and desktop notifications. Approvals and questions always notify; everything still lands in the inbox."
         stacked
