@@ -73,6 +73,28 @@ describe("the orchestrator's folder", () => {
   });
 });
 
+describe("turn checkpoints", () => {
+  it("are written for agents only: a read-only project manager never changes its folder", async () => {
+    const pm = env.addSession({
+      role: "pm",
+      status: "idle",
+      cwd: env.githubProject.path,
+      worktreePath: null,
+      branch: null,
+    });
+    await launcher.resume(env.repo.get(pm.id), { text: "hi", attachments: [] });
+    const agent = env.addSession({ status: "idle" });
+    await launcher.resume(env.repo.get(agent.id), { text: "hi", attachments: [] });
+    const starts = calls.filter((c) => c.name === "session.start");
+    const flag = (id: string) => {
+      const start = starts.find((c) => c.name === "session.start" && c.sessionId === id);
+      return start?.name === "session.start" ? start.checkpoints : undefined;
+    };
+    expect(flag(pm.id)).toBe(false);
+    expect(flag(agent.id)).toBe(true);
+  });
+});
+
 describe("new worktrees of a GitHub project", () => {
   it("fetch first, so they can start from the up-to-date default branch", async () => {
     const session = env.addSession({ status: "starting", worktreePath: null, branch: null });
