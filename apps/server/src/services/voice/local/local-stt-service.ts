@@ -332,6 +332,9 @@ export class LocalSttService {
       ? "en"
       : (isoLanguage(opts.language) ?? (allowed.length === 1 ? allowed[0] : null) ?? "auto");
     return this.serially(async () => {
+      // Cancelled while it waited its turn (a call hung up, the app closed): skip it, so a
+      // backlog of clips nobody waits for doesn't keep the model busy for minutes.
+      if (opts.signal?.aborted) throw new ServiceError(400, "aborted", "Cancelled");
       const model = await this.model(pin);
       const started = performance.now();
       try {

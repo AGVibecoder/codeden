@@ -18,7 +18,7 @@ export interface Fetcher {
   raw(
     method: string,
     path: string,
-    init?: { body?: BodyInit; contentType?: string },
+    init?: { body?: BodyInit; contentType?: string; signal?: AbortSignal },
   ): Promise<Response>;
 }
 
@@ -33,11 +33,19 @@ export function createFetcher(origin: string, onUnauthorized: (code: string) => 
     path: string,
     headers: Record<string, string>,
     body: BodyInit | undefined,
+    signal?: AbortSignal,
   ): Promise<Response> {
     let res: Response;
     try {
-      res = await fetch(`${base}${path}`, { method, credentials: "include", headers, body });
+      res = await fetch(`${base}${path}`, {
+        method,
+        credentials: "include",
+        headers,
+        body,
+        ...(signal ? { signal } : {}),
+      });
     } catch {
+      if (signal?.aborted) throw new ApiRequestError(0, "aborted", "Cancelled");
       throw new ApiRequestError(0, "network", "Can't reach the CodeDen server");
     }
     if (!res.ok) {
@@ -76,7 +84,13 @@ export function createFetcher(origin: string, onUnauthorized: (code: string) => 
     get: (path, parse) => call("GET", path, undefined, parse),
     post: (path, body, parse) => call("POST", path, body ?? {}, parse),
     raw: (method, path, init) =>
-      send(method, path, init?.contentType ? { "content-type": init.contentType } : {}, init?.body),
+      send(
+        method,
+        path,
+        init?.contentType ? { "content-type": init.contentType } : {},
+        init?.body,
+        init?.signal,
+      ),
   };
 }
 

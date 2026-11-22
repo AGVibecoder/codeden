@@ -17,7 +17,11 @@ export interface SegmentedSttDeps {
   supported: boolean;
   capture: StartCapture;
   /** Transcribe one segment (a WAV clip) and return its text. */
-  transcribe: (wav: Blob, language: string | null | undefined) => Promise<string>;
+  transcribe: (
+    wav: Blob,
+    language: string | null | undefined,
+    signal?: AbortSignal,
+  ) => Promise<string>;
   /** Tuning for the pause detection (tests). */
   segmenter?: Omit<SegmenterOptions, "sampleRate">;
 }
@@ -25,7 +29,7 @@ export interface SegmentedSttDeps {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createSegmentedStt(deps: SegmentedSttDeps): SpeechToText {
-  let session: { stop(): void } | null = null;
+  let session: { stop(): void; cancel(): void } | null = null;
   return {
     supported: deps.supported,
     live: "segments",
@@ -44,7 +48,7 @@ export function createSegmentedStt(deps: SegmentedSttDeps): SpeechToText {
         opts.onEnd();
       };
       const queue = createSegmentQueue<Blob>({
-        transcribe: (wav) => deps.transcribe(wav, opts.language),
+        transcribe: (wav, signal) => deps.transcribe(wav, opts.language, signal),
         onText: opts.onText,
         onPending: opts.onPending,
         onError: (error) => {
@@ -61,6 +65,8 @@ export function createSegmentedStt(deps: SegmentedSttDeps): SpeechToText {
         capture = null;
         if (flush && segmenter) for (const segment of segmenter.flush()) send(segment);
         void queue.drain().then(() => {
+          // Cancelled meanwhile: no more text.
+          if (ended) return;
           opts.onText({ final: queue.text, draft: "" });
           end();
         });
@@ -89,10 +95,23 @@ export function createSegmentedStt(deps: SegmentedSttDeps): SpeechToText {
             end();
           },
         );
-      session = { stop: () => finish(true) };
+      session = {
+        stop: () => finish(true),
+        cancel: () => {
+          listening = false;
+          capture?.stop();
+          capture = null;
+          queue.cancel();
+          end();
+        },
+      };
     },
     stop() {
       session?.stop();
+      session = null;
+    },
+    cancel() {
+      session?.cancel();
       session = null;
     },
   };

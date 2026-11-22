@@ -34,7 +34,7 @@ export function createCloudStt(client: CodeDenClient, engine: SttEngine): Speech
   return createSegmentedStt({
     supported: canCapture(),
     capture: startMicCapture,
-    transcribe: async (wav, language) =>
-      (await client.voice.stt(wav, { engine, language: languageHint(language) })).text,
+    transcribe: async (wav, language, signal) =>
+      (await client.voice.stt(wav, { engine, language: languageHint(language) }, signal)).text,
   });
 }

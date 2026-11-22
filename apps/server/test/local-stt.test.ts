@@ -243,6 +243,20 @@ describe("local Whisper service", () => {
     await svc.stop();
   });
 
+  it("skips a clip that was cancelled while it waited its turn", async () => {
+    const { svc, settings } = service();
+    settings.update({ voice: { dictation: { local: { model: "small" } } } });
+    svc.download("small");
+    await svc.settled();
+    const gone = new AbortController();
+    gone.abort();
+    await expect(svc.transcribe(makeWav({ seconds: 1 }), { signal: gone.signal })).rejects.toThrow(
+      "Cancelled",
+    );
+    expect(calls.some((c) => c.startsWith("transcribe:"))).toBe(false);
+    await svc.stop();
+  });
+
   it("pads a phrase shorter than a second with silence", async () => {
     const { svc, settings } = service();
     settings.update({ voice: { dictation: { local: { model: "small" } } } });

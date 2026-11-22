@@ -180,6 +180,7 @@ describe("dictation segment queue", () => {
       onText: (t) => updates.push(t),
       onPending: (n) => pending.push(n),
       onError,
+      concurrency: 3,
     });
     queue.add(0);
     queue.add(1);
@@ -262,6 +263,34 @@ describe("dictation segment queue", () => {
     queue.add(4);
     await queue.drain();
     expect(transcribe).toHaveBeenCalledTimes(4);
+  });
+
+  it("sends at most two segments at once, and drops the rest on cancel", async () => {
+    const replies = [deferred<string>(), deferred<string>(), deferred<string>()];
+    const signals: AbortSignal[] = [];
+    const transcribe = vi.fn((n: number, signal: AbortSignal) => {
+      signals.push(signal);
+      return (replies[n] as ReturnType<typeof deferred<string>>).promise;
+    });
+    const onText = vi.fn();
+    const onError = vi.fn();
+    const queue = createSegmentQueue<number>({ transcribe, onText, onError });
+    for (const n of [0, 1, 2, 3]) queue.add(n);
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
+    // The third goes out once one of the first two is back.
+    replies[0]?.resolve("Fix");
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(3));
+    expect(transcribe.mock.calls.map(([n]) => n)).toEqual([0, 1, 2]);
+    onText.mockClear();
+    // Hanging up: the running ones are aborted, the waiting one is never sent.
+    queue.cancel();
+    expect(signals.every((s) => s.aborted)).toBe(true);
+    replies[1]?.reject(new Error("aborted"));
+    replies[2]?.reject(new Error("aborted"));
+    await queue.drain();
+    expect(transcribe).toHaveBeenCalledTimes(3);
+    expect(onError).not.toHaveBeenCalled();
+    expect(onText).not.toHaveBeenCalled();
   });
 });
 
