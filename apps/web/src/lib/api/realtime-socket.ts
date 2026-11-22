@@ -117,7 +117,10 @@ export class RealtimeSocket {
       return;
     }
     const parsed = UiServerMessage.safeParse(raw);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      this.rejected(raw, parsed.error.issues[0]);
+      return;
+    }
     const msg = parsed.data;
     switch (msg.type) {
       case "hello":
@@ -143,6 +146,31 @@ export class RealtimeSocket {
         break;
     }
     this.subscription?.listener(msg);
+  }
+
+  /**
+   * A message that doesn't match the contract: say so instead of dropping it silently. A
+   * rejected `transcript` may carry a turn's end, which the server won't send again, so that
+   * session's watchers reload its transcript as after a `transcript_resync`.
+   */
+  private rejected(
+    raw: unknown,
+    issue: { path: PropertyKey[]; message: string } | undefined,
+  ): void {
+    const msg = (raw ?? {}) as { type?: unknown; sessionId?: unknown; seq?: unknown };
+    console.warn(
+      `CodeDen: ignored a ${String(msg.type)} message that doesn't match the contract`,
+      issue ? `${issue.path.join(".")}: ${issue.message}` : "",
+    );
+    if (msg.type !== "transcript" || typeof msg.sessionId !== "string") return;
+    const watch = this.watches.get(msg.sessionId);
+    if (!watch) return;
+    const resync: TranscriptWatchMessage = {
+      type: "transcript_resync",
+      sessionId: msg.sessionId,
+      seq: typeof msg.seq === "number" ? Math.max(watch.seq, msg.seq) : watch.seq,
+    };
+    for (const l of watch.listeners) l(resync);
   }
 
   private sendSubscribe(): void {

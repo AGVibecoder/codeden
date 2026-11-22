@@ -86,6 +86,24 @@ describe("RealtimeSocket", () => {
     ]);
   });
 
+  it("turns a transcript it can't accept into a resync, with a warning, instead of dropping it", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const socket = new RealtimeSocket("ws://x/ws");
+    const watched: TranscriptWatchMessage[] = [];
+    socket.watch("s1", 7, (m) => watched.push(m));
+    const ws = FakeSocket.instances[0];
+    if (!ws) throw new Error("no socket");
+    ws.open();
+    // A turn row that breaks the contract: the whole message would be lost, turn end included.
+    ws.push({ type: "transcript", sessionId: "s1", seq: 20, threads: [], turns: [{}], items: [] });
+    expect(watched).toEqual([{ type: "transcript_resync", sessionId: "s1", seq: 20 }]);
+    expect(warn).toHaveBeenCalledOnce();
+    // Messages for sessions nobody watches are only reported.
+    ws.push({ type: "transcript", sessionId: "s2", seq: 21, threads: [], turns: [{}], items: [] });
+    expect(watched).toHaveLength(1);
+    warn.mockRestore();
+  });
+
   it("unwatches when the last listener leaves", () => {
     const socket = new RealtimeSocket("ws://x/ws");
     socket.subscribe(0, () => {});
