@@ -59,7 +59,7 @@ export class ChatterboxSpeech {
     const child = this.child;
     this.child = null;
     this.ready = null;
-    child?.kill();
+    if (child) killTree(child);
     this.failAll(new Error("Chatterbox stopped"));
   }
 
@@ -122,6 +122,26 @@ export class ChatterboxSpeech {
     });
     return this.ready;
   }
+}
+
+/**
+ * Stop a process and what it started. On Windows a virtual environment's `python.exe` is a
+ * launcher that starts the real interpreter as its child, which a plain kill would leave
+ * running with the model in memory, so the whole tree goes (`taskkill /T`).
+ */
+function killTree(child: ChildProcess): void {
+  if (process.platform === "win32" && child.pid) {
+    try {
+      spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+      }).on("error", () => child.kill());
+      return;
+    } catch {
+      // Fall through to a plain kill.
+    }
+  }
+  child.kill();
 }
 
 /** Spawn `python chatterbox_tts.py serve` with the given environment. */

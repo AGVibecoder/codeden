@@ -35,6 +35,9 @@ import { windowShot } from "./window-shot";
 const DOCS_URL = "https://github.com/leonvanzyl/codeden/blob/main/docs/desktop.md";
 /** Longest a quit may take (browser hand-off 15 s + server stop up to 30 s) before it's forced. */
 const QUIT_LIMIT_MS = 45_000;
+/** On quit: how long the server gets to close and stop the runner, then the runner to exit. */
+const QUIT_SERVER_MS = 25_000;
+const QUIT_RUNNER_MS = 10_000;
 
 /**
  * The desktop app (§17): one window on the server's UI, a tray with live counts, the app
@@ -223,7 +226,13 @@ export class DesktopApp {
           await this.updates.installOnQuit();
           return;
         }
-        await this.conn?.server?.stop({ stopRunner: false });
+        // Quitting ends everything CodeDen started: the server (with Whisper and Chatterbox's
+        // voice model) and the runner with its agent sessions and terminals.
+        const server = this.conn?.server;
+        if (server) {
+          await server.stop({ stopRunner: true, timeoutMs: QUIT_SERVER_MS });
+          await waitForRunnerExit(homeFiles(this.args.home).runnerLock, QUIT_RUNNER_MS, this.log);
+        }
         this.tray?.destroy();
       } catch (error) {
         // A failed step must not leave the app unable to quit.
