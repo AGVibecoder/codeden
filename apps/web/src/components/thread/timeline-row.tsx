@@ -121,8 +121,8 @@ export function TimelineRowView({
         case "notice": {
           const artifact = sharedArtifactOf(item);
           if (artifact) return <SharedArtifactCard item={item} artifact={artifact} />;
-          const notices = noticeBatchOf(item);
-          if (notices) return <NoticeBatchCard notices={notices} />;
+          const batch = noticeBatchOf(item);
+          if (batch) return <NoticeBatchCard batch={batch} />;
           const checks = checkRunOf(item);
           if (checks) return <CheckRunCard item={item} data={checks} sessionId={sessionId} />;
           return <NoticeCard item={item} />;

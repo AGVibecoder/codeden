@@ -84,10 +84,21 @@ describe("foldDigest", () => {
     expect(folded.text).toBe("What now?");
   });
 
+  it("folds the GitHub summary out of the text", () => {
+    const summary = "GitHub since your last turn: 2 PRs opened (#1, #2).";
+    const folded = foldDigest(
+      `${digest}\n\n${tagged(updates)}\n\n<codeden_github_summary>\n${summary}\n</codeden_github_summary>\n\nclose it`,
+    );
+    expect(folded.github).toBe(summary);
+    expect(folded.updates).toBe(updates);
+    expect(folded.text).toBe("close it");
+  });
+
   it("leaves ordinary messages alone and spots automatic wake-ups", () => {
     expect(foldDigest("Fix the flaky test")).toEqual({
       status: null,
       updates: null,
+      github: null,
       text: "Fix the flaky test",
       wake: false,
     });
@@ -183,7 +194,7 @@ const finished: Notice = {
 
 describe("notice cards", () => {
   it("reads typed notices from the batch item and renders them as cards", async () => {
-    const notices = noticeBatchOf({
+    const batch = noticeBatchOf({
       id: "notices-t1",
       kind: "notice",
       status: "completed",
@@ -192,11 +203,33 @@ describe("notice cards", () => {
       message: "1 update since the last turn",
       data: { notices: [finished] },
     });
-    expect(notices).toHaveLength(1);
-    renderWithClient(<NoticeBatchCard notices={notices ?? []} />, undefined, { withRouter: true });
+    expect(batch?.notices).toHaveLength(1);
+    expect(batch?.summarized).toEqual([]);
+    renderWithClient(
+      <NoticeBatchCard batch={batch ?? { notices: [], summarized: [] }} />,
+      undefined,
+      { withRouter: true },
+    );
     expect(await screen.findByText("Add README finished")).toBeTruthy();
     expect(screen.getByText("README added with a test")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Session/ }).getAttribute("href")).toBe("/sessions/s1");
+  });
+
+  it("folds the GitHub updates the agent only got as a summary", async () => {
+    const opened: Notice = {
+      ...finished,
+      id: "pr.opened:9",
+      type: "pr.opened",
+      title: "PR #9 opened: docs: fix typo",
+      data: { pr: { number: 9, url: "https://github.com/o/r/pull/9" } },
+    } as Notice;
+    renderWithClient(<NoticeBatchCard batch={{ notices: [], summarized: [opened] }} />, undefined, {
+      withRouter: true,
+    });
+    const toggle = await screen.findByRole("button", { name: /1 GitHub update in the summary/ });
+    expect(screen.queryByText("PR #9 opened: docs: fix typo")).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByText("PR #9 opened: docs: fix typo")).toBeTruthy();
   });
 
   it("shows an orchestrator message the loop guard held back, linked to the orchestrator", async () => {
@@ -211,7 +244,9 @@ describe("notice cards", () => {
       deliveredAt: ts,
       data: { fromSessionId: "orch1", text: "Please add a changelog entry" },
     };
-    renderWithClient(<NoticeBatchCard notices={[held]} />, undefined, { withRouter: true });
+    renderWithClient(<NoticeBatchCard batch={{ notices: [held], summarized: [] }} />, undefined, {
+      withRouter: true,
+    });
     expect(await screen.findByText("From the orchestrator")).toBeTruthy();
     expect(screen.getByText("Please add a changelog entry")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Session/ }).getAttribute("href")).toBe(
@@ -232,7 +267,11 @@ describe("notice cards", () => {
       notBefore: ts,
       data: { note: "Check whether the audit finished", requestedBy: "pm1" },
     };
-    renderWithClient(<NoticeBatchCard notices={[reminder]} />, undefined, { withRouter: true });
+    renderWithClient(
+      <NoticeBatchCard batch={{ notices: [reminder], summarized: [] }} />,
+      undefined,
+      { withRouter: true },
+    );
     expect(await screen.findByText("Wake-up")).toBeTruthy();
     expect(screen.getByText("Check whether the audit finished")).toBeTruthy();
   });

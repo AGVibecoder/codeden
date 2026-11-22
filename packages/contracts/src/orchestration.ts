@@ -289,6 +289,11 @@ export const NOTICE_BATCH_CODE = "orchestration_notices";
 /** `data` of a `notice` item with `code: "orchestration_notices"` (rendered as cards). */
 export const NoticeBatchData = z.object({
   notices: z.array(Notice),
+  /**
+   * GitHub notices the project's GitHub updates level sent to the agent only as a short summary
+   * (Digest, or the quieter ones under Important): shown folded, under the live notices.
+   */
+  summarized: z.array(Notice).default([]),
 });
 export type NoticeBatchData = z.infer<typeof NoticeBatchData>;
 
