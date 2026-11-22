@@ -42,9 +42,13 @@ vi.mock("@/lib/realtime", () => ({
     };
   },
 }));
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => navigate,
+  useRouter: () => ({ state: { location: { pathname: "/" } } }),
+}));
 vi.mock("@/lib/api", () => ({ useClient: () => ({}) }));
 vi.mock("@/lib/voice/read-aloud", () => ({ startReadAloud: () => () => {} }));
+vi.mock("@/lib/attention/reply-alerts", () => ({ startReplyAlerts: () => () => {} }));
 vi.mock("@/components/shell/use-attention", () => ({ useAttention: () => {} }));
 vi.mock("@/lib/queries", () => ({
   snapshotKey: ["snapshot"],

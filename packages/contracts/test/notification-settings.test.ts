@@ -20,8 +20,14 @@ describe("notification settings", () => {
       toasts: false,
       browser: true,
       sound: true,
+      replies: true,
       categories: { needs_you: true, failure: true, factory: false, automation: true },
     });
+  });
+
+  it("alerts on orchestrator and project manager replies by default, and can turn them off", () => {
+    expect(Settings.parse({}).notifications.replies).toBe(true);
+    expect(roundTrip({ notifications: { replies: false } }).notifications.replies).toBe(false);
   });
 
   it("keeps factory activity quiet by default and round-trips a category switch", () => {

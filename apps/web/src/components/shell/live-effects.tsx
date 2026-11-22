@@ -1,10 +1,11 @@
 import type { InboxItem, Snapshot } from "@codeden/contracts";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useClient } from "@/lib/api";
 import { attentionTarget, isBlockingKind } from "@/lib/attention/blocking";
+import { startReplyAlerts } from "@/lib/attention/reply-alerts";
 import {
   createUpdateGrouper,
   describeUpdates,
@@ -34,6 +35,7 @@ export function LiveEffects() {
   const client = useClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const router = useRouter();
   const { data } = useSnapshot();
   const openCount = data?.inbox.filter((i) => i.status === "open").length ?? 0;
   const grouper = useMemo(() => createUpdateGrouper(), []);
@@ -81,6 +83,17 @@ export function LiveEffects() {
     });
   }, [queryClient, navigate, grouper]);
 
+  // A toast (and a notification in the background) when the orchestrator or a PM replies.
+  useEffect(
+    () =>
+      startReplyAlerts({
+        client,
+        queryClient,
+        currentPath: () => router.state.location.pathname,
+        open: (target) => void navigate(target),
+      }),
+    [client, queryClient, navigate, router],
+  );
   // Read the final message aloud when any session's turn completes (§11.3).
   useEffect(() => startReadAloud(client, queryClient), [client, queryClient]);
   // Voice calls with the orchestrator use the same client and cache (§11.3).

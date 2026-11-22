@@ -287,6 +287,12 @@ export const Settings = z.object({
       /** A short chime when an agent is blocked on the user (an approval or a question). */
       sound: z.boolean().default(true),
       /**
+       * A toast (and a desktop notification while CodeDen is in the background) when the
+       * orchestrator or a project manager finishes a turn with a message for the user. Agent
+       * sessions (workers) never raise one.
+       */
+      replies: z.boolean().default(true),
+      /**
        * Which inbox categories (`InboxItem.notify`) raise a toast and a desktop notification.
        * Approvals and questions always do while `toasts` / `browser` is on; switched-off
        * categories still land in the inbox. The factory looks after its own activity, so that
