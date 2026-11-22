@@ -235,6 +235,8 @@ export class SessionHost {
     if (modelOrEffort) await session.configure?.(change);
     if (cmd.autonomy !== undefined) await session.setAutonomy?.(cmd.autonomy);
     if (cmd.planMode !== undefined) await session.setPlanMode?.(cmd.planMode);
+    // Without live support the folders apply at the session's next start.
+    if (cmd.writableFolders !== undefined) await session.setWritableFolders?.(cmd.writableFolders);
   }
 
   async respond(cmd: RunnerCommandOf<"session.respond">): Promise<void> {

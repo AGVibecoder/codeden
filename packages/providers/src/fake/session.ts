@@ -73,6 +73,13 @@ export class FakeSession implements ProviderSession {
   /** Current autonomy. Full skips the scripted command approval, as it would for real. */
   autonomy: AutonomyLevel;
 
+  /** The folders it may write to outside its worktree (tests read them). */
+  writableFolders: readonly string[] = [];
+
+  async setWritableFolders(folders: readonly string[]): Promise<void> {
+    this.writableFolders = folders;
+  }
+
   async setAutonomy(level: AutonomyLevel): Promise<void> {
     this.autonomy = level;
   }

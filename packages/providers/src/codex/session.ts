@@ -69,6 +69,8 @@ export class CodexSession implements ProviderSession {
   /** Current autonomy; after `setAutonomy`, every following `turn/start` carries it. */
   private autonomy: AutonomyLevel;
   private autonomyChanged = false;
+  /** Folders outside the worktree it may write to; `setWritableFolders` replaces them. */
+  private writableFolders: readonly string[];
   private closed = false;
   /** The model the thread started with (the user's Codex config when none was chosen). */
   private threadModel: string | undefined;
@@ -101,6 +103,7 @@ export class CodexSession implements ProviderSession {
     this.mapper.codexThreadId = opts.resumeToken;
     this.broker = new ApprovalBroker(emit);
     this.autonomy = opts.autonomy;
+    this.writableFolders = opts.additionalDirectories;
   }
 
   /** Start the app-server and the thread. Called by the adapter before returning the session. */
@@ -124,6 +127,15 @@ export class CodexSession implements ProviderSession {
    */
   async setAutonomy(level: AutonomyLevel): Promise<void> {
     this.autonomy = level;
+    this.autonomyChanged = true;
+  }
+
+  /**
+   * Writable folders: CodeDen's checks use them from the next approval request, Codex's sandbox
+   * from the next `turn/start` (sent with the sandbox override).
+   */
+  async setWritableFolders(folders: readonly string[]): Promise<void> {
+    this.writableFolders = [...folders];
     this.autonomyChanged = true;
   }
 
@@ -279,7 +291,11 @@ export class CodexSession implements ProviderSession {
 
   /** Session options with the current autonomy (a restarted app-server resumes with it). */
   private currentOptions(): SessionOptions {
-    return { ...this.opts, autonomy: this.autonomy };
+    return {
+      ...this.opts,
+      autonomy: this.autonomy,
+      additionalDirectories: [...this.writableFolders],
+    };
   }
 
   /** `turn/start` overrides that carry the current autonomy (§11.2). */
@@ -343,7 +359,8 @@ export class CodexSession implements ProviderSession {
             broker: this.broker,
             risk: {
               cwd: this.opts.cwd,
-              extraRoots: this.opts.additionalDirectories,
+              // Built per request, so folders changed mid-session apply at once.
+              extraRoots: this.writableFolders,
               ...(this.opts.ownBranch ? { ownBranch: this.opts.ownBranch } : {}),
               ...(this.opts.codedenHome ? { codedenHome: this.opts.codedenHome } : {}),
               ...(this.opts.artifactsDir ? { artifactsDir: this.opts.artifactsDir } : {}),

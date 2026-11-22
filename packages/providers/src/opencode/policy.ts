@@ -47,7 +47,7 @@ export class OpenCodePolicy {
 
   constructor(
     private autonomy: AutonomyLevel,
-    private readonly ctx: RiskContext,
+    private ctx: RiskContext,
     /** Read-only sessions (orchestrator, PMs). */
     private readonly readOnly = false,
   ) {}
@@ -67,6 +67,11 @@ export class OpenCodePolicy {
   setAutonomy(level: AutonomyLevel): void {
     this.autonomy = level;
     if (level === "read_only") this.sessionAllow.clear();
+  }
+
+  /** Replace the folders outside the worktree it may write to, from the next request. */
+  setWritableFolders(folders: readonly string[]): void {
+    this.ctx = { ...this.ctx, extraRoots: folders };
   }
 
   decide(call: PermissionCall): PolicyDecision {
