@@ -38,6 +38,11 @@ export interface SpeechToText {
     onError: (message: string) => void;
   }): void;
   stop(): void;
+  /**
+   * Stop at once and drop what hasn't come back (a call hung up): no more text arrives. Engines
+   * without it are stopped with `stop()`.
+   */
+  cancel?(): void;
 }
 
 export interface TextToSpeech {

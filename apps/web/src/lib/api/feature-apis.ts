@@ -182,7 +182,7 @@ export interface VoiceApi {
   /** Spoken audio (`audio/mpeg`) from the server's ElevenLabs proxy. */
   tts(req: TtsRequest): Promise<Blob>;
   /** Transcribe recorded audio with a cloud engine or local Whisper (WAV for local). */
-  stt(audio: Blob, query: SttQuery): Promise<SttResponse>;
+  stt(audio: Blob, query: SttQuery, signal?: AbortSignal): Promise<SttResponse>;
   /** Local Whisper: runtime and model download status on the server. */
   localStatus(): Promise<LocalSttStatus>;
   /** Start (or join) downloading the runtime and a model. */

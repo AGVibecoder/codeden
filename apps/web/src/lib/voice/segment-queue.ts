@@ -2,7 +2,8 @@ import type { DictationText } from "./engines";
 
 /**
  * Transcribes dictation segments as they finish (§11.3) and keeps their text in order. Each
- * segment is sent once, as soon as it is added, and the results may come back in any order:
+ * segment is sent once, at most `concurrency` (2) at a time so a slow engine can't take every
+ * connection the app has to its server, and the results may come back in any order:
  * - `final` is the text of every settled segment before the first one still pending, in order,
  *   so it only ever grows at the end;
  * - `draft` is the text of segments that came back ahead of one still pending.
@@ -19,6 +20,11 @@ export interface SegmentQueue<T> {
   readonly text: string;
   /** True once a segment failed. */
   readonly failed: boolean;
+  /**
+   * Drop every segment not back yet: waiting ones are never sent and running ones are aborted.
+   * No text or error is reported after it, and `drain()` resolves.
+   */
+  cancel(): void;
 }
 
 /**
@@ -52,19 +58,46 @@ export function joinSegments(pieces: readonly string[]): string {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createSegmentQueue<T>(opts: {
-  transcribe: (segment: T) => Promise<string>;
+  transcribe: (segment: T, signal: AbortSignal) => Promise<string>;
   onText: (text: DictationText) => void;
   onPending?: (count: number) => void;
   onError: (message: string) => void;
+  /** Segments being transcribed at once (default 2); the rest wait their turn. */
+  concurrency?: number;
 }): SegmentQueue<T> {
   /** One entry per segment, in order: its text, `null` when it failed, `undefined` while pending. */
   const results: (string | null | undefined)[] = [];
   const jobs: Promise<void>[] = [];
+  const limit = Math.max(1, opts.concurrency ?? 2);
+  /** Segments waiting for a free slot, each with the function that starts it. */
+  const waiting: (() => void)[] = [];
+  let running = 0;
   let pending = 0;
   let failed = false;
+  let cancelled = false;
+  const abort = new AbortController();
   let last: DictationText = { final: "", draft: "" };
 
+  /** A free slot, once one is free (or right away). */
+  const slot = () =>
+    new Promise<void>((resolve) => {
+      if (running < limit) {
+        running++;
+        resolve();
+      } else {
+        waiting.push(() => {
+          running++;
+          resolve();
+        });
+      }
+    });
+  const release = () => {
+    running--;
+    waiting.shift()?.();
+  };
+
   const emit = () => {
+    if (cancelled) return;
     let settled = 0;
     while (settled < results.length && results[settled] !== undefined) settled++;
     const texts = (from: number, to: number) =>
@@ -86,30 +119,44 @@ export function createSegmentQueue<T>(opts: {
       return failed;
     },
     add(segment) {
-      if (failed) return;
+      if (failed || cancelled) return;
       const index = results.length;
       results.push(undefined);
       pending++;
       opts.onPending?.(pending);
-      const job = Promise.resolve()
-        .then(() => opts.transcribe(segment))
+      const job = slot()
+        .then(async () => {
+          try {
+            if (cancelled) return null;
+            return await opts.transcribe(segment, abort.signal);
+          } finally {
+            release();
+          }
+        })
         .then(
           (text) => {
             results[index] = text;
           },
           (error: unknown) => {
             results[index] = null;
-            if (failed) return;
+            if (failed || cancelled) return;
             failed = true;
             opts.onError(message(error));
           },
         )
         .finally(() => {
           pending--;
-          opts.onPending?.(pending);
+          if (!cancelled) opts.onPending?.(pending);
           emit();
         });
       jobs.push(job);
+    },
+    cancel() {
+      if (cancelled) return;
+      cancelled = true;
+      abort.abort();
+      // Waiting segments start, see the cancel and finish without sending anything.
+      while (waiting.length > 0) waiting.shift()?.();
     },
     async drain() {
       // Segments can be added while earlier ones are in flight; wait until none are left.

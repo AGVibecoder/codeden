@@ -145,10 +145,11 @@ export function httpVoiceApi(http: Fetcher): VoiceApi {
       });
       return res.blob();
     },
-    async stt(audio, query) {
+    async stt(audio, query, signal) {
       const res = await http.raw("POST", `/stt${qs(query)}`, {
         body: audio,
         contentType: audio.type || "audio/webm",
+        ...(signal ? { signal } : {}),
       });
       return SttResponse.parse(await res.json());
     },

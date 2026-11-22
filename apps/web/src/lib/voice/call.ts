@@ -122,7 +122,9 @@ export class VoiceCall {
     this.stopReplies();
     this.speaking?.abort();
     this.speaking = null;
-    this.deps.engine.stop();
+    // Clips still being transcribed are dropped: nobody reads them after hanging up.
+    if (this.deps.engine.cancel) this.deps.engine.cancel();
+    else this.deps.engine.stop();
     this.deps.onLevel?.(null);
     this.set({ phase: "ended", draft: "" });
   }
