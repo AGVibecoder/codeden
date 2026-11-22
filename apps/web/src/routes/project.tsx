@@ -19,6 +19,7 @@ import { ArchivedSessionsList, SessionsList } from "@/components/project/lists";
 import { NowNext } from "@/components/project/now-next";
 import { ProjectExecution } from "@/components/project/project-execution";
 import { ProjectSettings } from "@/components/project/project-settings";
+import { PublishGithubButton } from "@/components/project/publish-github";
 import { ProjectTile } from "@/components/shell/sidebar/project-group";
 import { Button } from "@/components/ui/button";
 import { ProjectSpendCard } from "@/components/usage/project-spend-card";
@@ -103,6 +104,7 @@ export function ProjectPage({
         actions={
           <>
             {factory && <OpenFactoryViewButton projectId={projectId} />}
+            {project.kind !== "github" && <PublishGithubButton project={project} />}
             <Button size="sm" variant="ghost" asChild>
               <Link to="/projects/$projectId/vision" params={{ projectId }}>
                 <FileText /> Vision

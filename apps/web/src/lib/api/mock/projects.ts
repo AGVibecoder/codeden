@@ -13,6 +13,8 @@ type MockProjectApi = Pick<
   | "reorderProjects"
   | "refreshProject"
   | "disconnectGithub"
+  | "publishGithubPlan"
+  | "publishGithub"
 >;
 
 const NOT_GITHUB =
@@ -166,6 +168,38 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
       const project: Project = { ...rest, kind: "local", updatedAt: new Date().toISOString() };
       world.emitDomain({ type: "project.updated", sessionId: null, payload: { project } });
       return later({ project }, 80);
+    },
+
+    async publishGithubPlan(id) {
+      const current = find(id);
+      return later(
+        {
+          isGitRepo: false,
+          hasCommits: false,
+          template: "unreal" as const,
+          addsGitignore: true,
+          lfsPatterns: ["*.uasset", "*.umap"],
+          files: 1240,
+          bytes: 812_000_000,
+          tooLarge: [],
+          blocked: current.kind === "github" ? `${current.name} is already on GitHub.` : null,
+          owners: ["you", "your-org"],
+          suggestedName: current.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        },
+        300,
+      );
+    },
+
+    async publishGithub(id, req) {
+      const current = find(id);
+      const project: Project = {
+        ...current,
+        kind: "github",
+        github: { owner: req.owner, repo: req.name },
+        updatedAt: new Date().toISOString(),
+      } as Project;
+      world.emitDomain({ type: "project.updated", sessionId: null, payload: { project } });
+      return later({ project, url: `https://github.com/${req.owner}/${req.name}` }, 800);
     },
   };
 }
