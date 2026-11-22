@@ -193,6 +193,15 @@ export const Settings = z.object({
            * engine takes the first; the cloud engines detect freely. See `dictationLanguages`.
            */
           languages: z.array(z.string().min(2).max(20)).max(8).default([]),
+          /**
+           * The microphone dictation, calls and the wake word use (a browser device id, with
+           * its name for showing it when it's unplugged); null is the system default. When it
+           * is gone, the system default is used.
+           */
+          microphone: z
+            .object({ id: z.string().min(1).max(512), label: z.string().max(200) })
+            .nullable()
+            .default(null),
           /** Local Whisper: which downloaded model transcribes (§11.3). */
           local: z
             .object({

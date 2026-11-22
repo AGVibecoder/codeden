@@ -17,6 +17,7 @@ Both directions sit behind swappable engines. The defaults are free and run in y
 | ElevenLabs | An ElevenLabs API key | Scribe transcription |
 | OpenAI | An OpenAI API key (shared with OpenAI Images) | `gpt-4o-mini-transcribe` |
 
+- **Microphone:** **Settings → Voice → Dictation → Microphone** picks the microphone CodeDen listens with: **System default**, or one of yours (a headset, say). Dictation, calls, the wake word and the Whisper test all use it; when it's unplugged, the system default is used until it's back. **Check** shows a live level bar while you talk, so you can see right away that CodeDen hears you. The Browser engine always uses the system default.
 - **Languages:** with none, dictation follows the browser's language (or, for server engines, detects it). Add the languages you speak with **+ Add a language**; the first one is your main language.
   - **Local (Whisper)** switches between them by itself while you talk, so you can mix English and your mother tongue without changing anything. When it thinks it hears a language that isn't in your list (Dutch taken for German, say), it transcribes that phrase again in your main language. Use a model without "(English)" in its name.
   - **Browser** listens in the first language only. **ElevenLabs** and **OpenAI** detect the language by themselves when you have more than one.
@@ -37,6 +38,7 @@ Whisper runs on your own machine through the CodeDen server; your audio never le
 - **The model** is **Large v3 Turbo** (547 MB download): accurate in many languages, Dutch included. The smaller Whisper models mistook languages and made up sentences too often, so CodeDen no longer offers them; a setting that still names one uses Large v3 Turbo.
 - **On your graphics card:** on Windows with an NVIDIA or AMD Radeon card, CodeDen downloads the Vulkan build of the Whisper runtime (about 13 MB) and runs Whisper on the card, which is many times faster. Settings shows "runs on your graphics card" or "runs on the processor". If the card build doesn't load (no Vulkan driver), CodeDen switches to the processor build by itself. On the processor, Large v3 Turbo takes several seconds per sentence.
 - Phrases shorter than a second get a moment of silence added, which Whisper needs to recognise them.
+- When Whisper hears almost nothing it tends to make up a line such as "Thank you" or "Thanks for watching". A phrase that is only one of those lines is dropped; a longer sentence with the same words stays.
 - Files live in `~/.codeden/deps/whisper/` (runtime) and `~/.codeden/models/whisper/` (models). **Delete** in Settings removes a model.
 - Supported on Windows, macOS and Linux (x64 and arm64). Linux needs glibc 2.34 or newer (Ubuntu 22.04+, Debian 12+) and `libgomp1`.
 - The runtime is whisper.cpp built as a Node add-on (from the npm registry); models come from Hugging Face. Neither needs an account.

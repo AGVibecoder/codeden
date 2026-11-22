@@ -1,3 +1,5 @@
+import { microphoneConstraints } from "./microphone";
+
 /**
  * Microphone recording with `MediaRecorder`, for the local Whisper test in Settings. Dictation
  * itself captures live samples instead (`mic-capture.ts`), to transcribe while the user speaks.
@@ -21,7 +23,7 @@ export interface Recording {
 export async function startRecording(): Promise<Recording> {
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints() });
   } catch {
     throw new Error("Microphone access was blocked.");
   }

@@ -25,6 +25,7 @@ import {
 } from "./sections-voice-chatterbox";
 import { DictationLanguagesRow } from "./sections-voice-languages";
 import { LocalWhisperRows } from "./sections-voice-local";
+import { MicrophoneRow } from "./sections-voice-microphone";
 import { WakeWordRows } from "./sections-voice-wake";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
 import { QuietHoursRow, ShortcutRecorder } from "./voice-controls";
@@ -140,6 +141,7 @@ export function VoiceSettings() {
             ]}
           />
         </SettingRow>
+        <MicrophoneRow />
         {v.dictation.engine === "local" && <LocalWhisperRows />}
         <DictationLanguagesRow />
         <SettingRow

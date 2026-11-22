@@ -1,4 +1,5 @@
 // Never inlined as a `data:` URL, which the UI's `script-src 'self'` would block.
+import { microphoneConstraints } from "./microphone";
 import workletUrl from "./pcm-capture.worklet.js?url&no-inline";
 
 /**
@@ -74,7 +75,11 @@ export const startMicCapture: StartCapture = async (onSamples) => {
   let stream: MediaStream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: microphoneConstraints({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }),
     });
   } catch {
     void context.close().catch(() => {});

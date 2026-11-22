@@ -10,6 +10,7 @@ import { useProject } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { createCloudStt } from "@/lib/voice/cloud-stt";
 import { stt as browserStt } from "@/lib/voice/engines";
+import { setPreferredMicrophone } from "@/lib/voice/microphone";
 import { WakeWordListener } from "@/lib/voice/wake-word";
 import { type CallTarget, callActive, sameTarget, useCallStore } from "@/stores/call";
 
@@ -160,7 +161,12 @@ export function WakeWord() {
   const phase = useCallStore((s) => s.state?.phase);
   const listener = useRef<WakeWordListener | null>(null);
   const allowed = wake.enabled && (choice === "browser" || choice === "local");
+  const microphone = settings.voice.dictation.microphone?.id ?? null;
 
+  // Every capture (dictation, calls, the Whisper test, this listener) asks for this device.
+  useEffect(() => setPreferredMicrophone(microphone), [microphone]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new microphone restarts the listener.
   useEffect(() => {
     if (!allowed) return;
     const engine = choice === "browser" ? browserStt : createCloudStt(client, choice);
@@ -180,7 +186,7 @@ export function WakeWord() {
       l.stop();
       listener.current = null;
     };
-  }, [allowed, choice, client, wake.phrase, language]);
+  }, [allowed, choice, client, wake.phrase, language, microphone]);
 
   // Listen again once a call ends.
   useEffect(() => {
