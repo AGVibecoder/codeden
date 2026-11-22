@@ -335,6 +335,10 @@ export class SessionLauncher {
           providerId: session.provider,
           options: this.sessionOptions(session, token),
           input,
+          // The orchestrator and project managers are read-only, so a turn never changes their
+          // folder: a checkpoint there would only copy the whole project (minutes on a slow disk)
+          // while the session counts as busy and queued messages wait.
+          checkpoints: session.role === "agent",
         },
         START_TIMEOUT_MS,
       );
