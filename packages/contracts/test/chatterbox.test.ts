@@ -55,6 +55,14 @@ describe("chatterbox contracts", () => {
     expect(Settings.parse({}).voice.dictation.languages).toEqual([]);
   });
 
+  it("defaults the microphone to the system default and keeps a chosen one", () => {
+    expect(Settings.parse({}).voice.dictation.microphone).toBeNull();
+    const mic = { id: "abc123", label: "Headset Microphone (PRO X)" };
+    expect(
+      Settings.parse({ voice: { dictation: { microphone: mic } } }).voice.dictation.microphone,
+    ).toEqual(mic);
+  });
+
   it("defaults the call's wake word to off with Hey Annie", () => {
     expect(Settings.parse({}).voice.call.wakeWord).toEqual({ enabled: false, phrase: "Hey Annie" });
     expect(Settings.parse({}).voice.call.audio).toBe("speakers");

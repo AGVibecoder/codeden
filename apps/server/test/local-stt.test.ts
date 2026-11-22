@@ -416,6 +416,10 @@ describe("local Whisper service", () => {
     expect(cleanTranscript("Bedankt voor het kijken.")).toBe("");
     expect(cleanTranscript("TV Gelderland 2021")).toBe("");
     expect(cleanTranscript("You")).toBe("");
+    expect(cleanTranscript("Thank you.")).toBe("");
+    expect(cleanTranscript(" Thank you very much! ")).toBe("");
+    expect(cleanTranscript("Thanks")).toBe("");
+    expect(cleanTranscript("Thank you, that fixed it.")).toBe("Thank you, that fixed it.");
     expect(cleanTranscript("Test 1 2 3")).toBe("Test 1 2 3");
     expect(cleanTranscript("Thank you for watching the build, it passed.")).toBe(
       "Thank you for watching the build, it passed.",

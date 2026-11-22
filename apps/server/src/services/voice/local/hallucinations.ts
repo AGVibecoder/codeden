@@ -19,6 +19,11 @@ const MADE_UP = [
   "subtitles by the amara org community",
   "transcribed by",
   "you",
+  // Whisper's usual answer to a microphone that hears nothing; a real "thank you" in a longer
+  // sentence stays.
+  "thank you",
+  "thank you very much",
+  "thanks",
   // Dutch
   "bedankt voor het kijken",
   "bedankt voor het kijken en tot de volgende keer",
