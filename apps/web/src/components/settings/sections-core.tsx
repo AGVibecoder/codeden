@@ -15,6 +15,7 @@ import { ModelVisibilitySettings } from "./model-visibility";
 import { ProviderHistorySettings } from "./provider-history";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
 import { UpdateModeSetting } from "./update-mode";
+import { WritableFoldersRow } from "./writable-folders";
 
 export function GeneralSettings() {
   const { settings, update } = useSettings();
@@ -253,6 +254,7 @@ export function AutonomySettings() {
       >
         <span className="text-2xs text-muted-foreground">Always ask</span>
       </SettingRow>
+      <WritableFoldersRow />
     </SettingsSection>
   );
 }

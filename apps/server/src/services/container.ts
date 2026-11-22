@@ -272,6 +272,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     git: gitBroker,
     sandboxes,
     log: opts.log,
+    writableFolders: () => opts.settings.get().autonomy.writableFolders,
   });
   // Before the session service: a start in a project the start-up check hasn't reached checks it.
   const redetector = new ProjectRedetector({

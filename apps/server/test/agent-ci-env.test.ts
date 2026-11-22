@@ -45,6 +45,32 @@ function launcher(): SessionLauncher {
   } as unknown as LauncherDeps);
 }
 
+describe("folders agents may write to", () => {
+  it("hands the folders from settings to sessions on this machine", async () => {
+    const id = await addProject();
+    const session = { ...sampleSession, projectId: id };
+    const runner = { mcpProxyUrl: () => null };
+    const withFolders = new SessionLauncher({
+      runner,
+      projects,
+      home: join(dir, "home"),
+      writableFolders: () => ["E:\\PROJECTS\\shared"],
+    } as unknown as LauncherDeps);
+    expect(withFolders.sessionOptions(session).additionalDirectories).toEqual([
+      "E:\\PROJECTS\\shared",
+    ]);
+    // A session on another runner (a sandbox) gets none: the paths are on this machine.
+    const remote = new SessionLauncher({
+      runner,
+      runners: { forSession: () => ({ mcpProxyUrl: () => null }) },
+      projects,
+      home: join(dir, "home"),
+      writableFolders: () => ["E:\\PROJECTS\\shared"],
+    } as unknown as LauncherDeps);
+    expect(remote.sessionOptions(session).additionalDirectories).toEqual([]);
+  });
+});
+
 describe("CI=true in a project's agent sessions", () => {
   it("is on for new projects and stays off once the project turns it off", async () => {
     const id = await addProject();
