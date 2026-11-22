@@ -64,7 +64,7 @@ export class AcpPolicy {
 
   constructor(
     private autonomy: AutonomyLevel,
-    private readonly ctx: RiskContext,
+    private ctx: RiskContext,
     /** Read-only sessions (orchestrator, PMs). */
     private readonly readOnly = false,
     /** Names of MCP servers whose tools run without asking (CodeDen's own). */
@@ -84,6 +84,11 @@ export class AcpPolicy {
   setAutonomy(level: AutonomyLevel): void {
     this.autonomy = level;
     if (level === "read_only") this.sessionAllow.clear();
+  }
+
+  /** Replace the folders outside the worktree it may write to, from the next call. */
+  setWritableFolders(folders: readonly string[]): void {
+    this.ctx = { ...this.ctx, extraRoots: folders };
   }
 
   decide(call: AcpToolState): AcpPolicyDecision {

@@ -125,6 +125,11 @@ export class AcpSession implements ProviderSession {
     if (!this.planning) await this.applyMode().catch(() => undefined);
   }
 
+  /** Writable folders for CodeDen's checks, from the next permission request. */
+  async setWritableFolders(folders: readonly string[]): Promise<void> {
+    this.policy.setWritableFolders(folders);
+  }
+
   async setPlanMode(on: boolean): Promise<void> {
     if (!this.config.spec.modes.plan) {
       throw new ProviderSessionError("unsupported", `${this.config.spec.label} has no plan mode`);

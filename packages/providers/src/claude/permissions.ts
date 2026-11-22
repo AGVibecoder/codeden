@@ -52,7 +52,7 @@ export class ClaudePolicy {
 
   constructor(
     private autonomy: AutonomyLevel,
-    private readonly ctx: RiskContext,
+    private ctx: RiskContext,
     /** Read-only sessions (orchestrator, PMs): edits and writing commands are denied. */
     private readonly readOnly = false,
   ) {}
@@ -72,6 +72,11 @@ export class ClaudePolicy {
   /** Switch the level; the next `gate()` uses it. `allow_session` decisions are kept. */
   setAutonomy(level: AutonomyLevel): void {
     this.autonomy = level;
+  }
+
+  /** Replace the folders outside the worktree it may write to; the next `gate()` uses them. */
+  setWritableFolders(folders: readonly string[]): void {
+    this.ctx = { ...this.ctx, extraRoots: folders };
   }
 
   /**

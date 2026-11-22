@@ -138,6 +138,11 @@ export class OpenCodeSession implements ProviderSession {
     this.policy.setAutonomy(level);
   }
 
+  /** Writable folders for CodeDen's checks, from the next permission request. */
+  async setWritableFolders(folders: readonly string[]): Promise<void> {
+    this.policy.setWritableFolders(folders);
+  }
+
   async send(input: UserInput): Promise<void> {
     if (this.closed) throw new ProviderSessionError("closed", "Session is closed");
     if (this.turnPending || this.mapper.currentTurnId) {

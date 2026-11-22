@@ -227,6 +227,12 @@ export const RunnerCommand = z.discriminatedUnion("name", [
     effort: ReasoningEffort.nullable().optional(),
     autonomy: AutonomyLevel.optional(),
     planMode: z.boolean().optional(),
+    /**
+     * Replace the folders outside the worktree the agent may write to without asking
+     * (`SessionOptions.additionalDirectories`). A provider that can't change them live keeps
+     * its folders until its next start; it never fails the command.
+     */
+    writableFolders: z.array(z.string().min(1)).max(64).optional(),
   }),
   z.object({
     name: z.literal("pty.open"),

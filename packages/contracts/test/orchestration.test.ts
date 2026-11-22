@@ -271,6 +271,16 @@ describe("autonomy changes on a running session (§11.2)", () => {
     expect(() => UpdateSessionRequest.parse({ autonomy: null })).toThrow();
   });
 
+  it("round-trips writable folders in the runner's session.configure", () => {
+    const command = {
+      name: "session.configure" as const,
+      sessionId: "s1",
+      writableFolders: ["E:\\PROJECTS", "E:\\claude"],
+    };
+    expect(RunnerCommand.parse(JSON.parse(JSON.stringify(command)))).toEqual(command);
+    expect(() => RunnerCommand.parse({ ...command, writableFolders: [""] })).toThrow();
+  });
+
   it("round-trips autonomy in the runner's session.configure", () => {
     const command = { name: "session.configure" as const, sessionId: "s1", autonomy: "full" };
     expect(RunnerCommand.parse(command)).toEqual(command);

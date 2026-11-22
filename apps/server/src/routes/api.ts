@@ -16,6 +16,7 @@ import { automations, inboxItems, sessions } from "../db/schema";
 import type { AppServices } from "../services/container";
 import { badRequest } from "../services/errors";
 import { archivedSessionCounts, snapshotSessions } from "../services/sessions/archived";
+import { pushWritableFolders } from "../services/sessions/live-folders";
 import { sessionSnapshot } from "../services/sessions/snapshot";
 import { agentConfigRoutes, sessionAgentConfigRoutes } from "./agent-config";
 import { automationRoutes, projectAutomationRoutes } from "./automations";
@@ -125,6 +126,13 @@ export function createApi(ctx: ApiContext) {
         }
         s.store.append([{ type: "settings.updated", sessionId: null, payload: { settings } }]);
         if (patch.imageGeneration) s.images.invalidate();
+        // Open sessions take a changed folder list from their next tool call, not their next start.
+        if (patch.autonomy?.writableFolders) {
+          void pushWritableFolders(
+            { repo: s.sessionRepo, runner: s.runner, runners: s.runners },
+            settings.autonomy.writableFolders,
+          );
+        }
         return c.json(settings);
       })
       .post("/shutdown", async (c) => {

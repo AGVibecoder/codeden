@@ -120,6 +120,13 @@ export interface ProviderSession {
    */
   setAutonomy?(level: AutonomyLevel): Promise<void>;
   /**
+   * Replace the folders outside the worktree the agent may write to without asking
+   * (`SessionOptions.additionalDirectories`, Settings › Folders agents may write to). CodeDen's
+   * own checks use them from the next tool call; a provider sandbox from the next turn.
+   * Optional: without it, the folders apply on the next resume.
+   */
+  setWritableFolders?(folders: readonly string[]): Promise<void>;
+  /**
    * Turn plan mode on or off. Present only when `capabilities().planMode`. On: the agent plans
    * without editing and asks to implement through a `plan` approval. Off: the session returns
    * to its autonomy level. A session that leaves plan mode on its own (the plan was approved)

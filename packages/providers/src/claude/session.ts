@@ -177,6 +177,11 @@ export class ClaudeSession implements ProviderSession {
     if (!this.planMode) await this.applyPermissionMode();
   }
 
+  /** Writable folders for CodeDen's checks, from the next tool call. */
+  async setWritableFolders(folders: readonly string[]): Promise<void> {
+    this.policy.setWritableFolders(folders);
+  }
+
   /**
    * Turn plan mode on or off, from the next tool call. Off returns to the autonomy level.
    * CodeDen's policy follows at once. Rejects when the CLI refuses the mode; the change is never
