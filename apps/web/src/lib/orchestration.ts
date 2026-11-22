@@ -94,8 +94,21 @@ export function foldDigest(raw: string): FoldedMessage {
     updates = rest.slice(0, end).trim();
     rest = rest.slice(end);
   }
-  const text = rest.trim();
+  // A message from a voice call carries a note for the agent, which the transcript leaves out.
+  const text = rest.replace(VOICE_RE, "").trim();
   return { status, updates, text, wake: text.startsWith(WAKE_PREFIX) };
+}
+
+/** The voice-call note, and the plain one calls added before it was in tags. */
+const VOICE_RE =
+  /^\s*(?:<codeden_voice>[\s\S]*?<\/codeden_voice>|\(Voice call: answer in one to three short spoken sentences, without markdown, lists or code\.\))\s*/;
+
+/**
+ * What a voice call sends (§11.3): what was said, after a note telling the agent its answer is
+ * read aloud. The note is in tags, so the transcript (`foldDigest`) shows only what was said.
+ */
+export function voiceMessage(said: string): string {
+  return `<codeden_voice>This message was spoken in a voice call, and your answer will be read aloud. Answer the way you would speak: no markdown, tables, code blocks or bullet symbols. Describe lists, code and steps in plain spoken words. Make it as long as the question needs.</codeden_voice>\n${said}`;
 }
 
 /**

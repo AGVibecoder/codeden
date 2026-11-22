@@ -5,7 +5,7 @@ import { NoticeBatchCard, noticeBatchOf } from "@/components/thread/cards/notice
 import { UserMessage } from "@/components/thread/messages";
 import { createFetcher } from "@/lib/api/http";
 import { httpOrchestrationApi, httpSessionConflictApi } from "@/lib/api/http-orchestration";
-import { foldDigest } from "@/lib/orchestration";
+import { foldDigest, voiceMessage } from "@/lib/orchestration";
 import { renderWithClient } from "./utils";
 
 const ts = "2026-11-07T10:00:00.000Z";
@@ -28,6 +28,22 @@ const pmUpdates = [
 const userText =
   "In demo, the sidebar cuts off details when it is narrow.\n\nAlso, how does archiving work?";
 const tagged = (list: string) => `<codeden_updates>\n${list}\n</codeden_updates>`;
+
+describe("voice call messages", () => {
+  it("send a note for the agent that the transcript leaves out", () => {
+    const sent = voiceMessage("this this this");
+    expect(sent).toContain("read aloud");
+    expect(sent).not.toMatch(/one to three|short spoken sentences/);
+    const status = '<codeden_status generated="x">\nAll quiet\n</codeden_status>\n\n';
+    expect(foldDigest(`${status}${sent}`).text).toBe("this this this");
+    // The plain note older calls added is left out too.
+    expect(
+      foldDigest(
+        "(Voice call: answer in one to three short spoken sentences, without markdown, lists or code.)\n\nhello",
+      ).text,
+    ).toBe("hello");
+  });
+});
 
 describe("foldDigest", () => {
   it("splits the status digest and notices from what the sender wrote", () => {

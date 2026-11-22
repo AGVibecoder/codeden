@@ -29,8 +29,9 @@ function useTargetName(target: CallTarget | null): string {
 
 /**
  * Starts a voice call with the orchestrator or a project manager (§11.3), next to the
- * dictation button in its message box; hangs up while this call is on. Only one call runs at
- * a time: while a call with someone else is on, the button says so and does nothing.
+ * dictation button in its message box; hangs up while a call is on. Only one call runs at a
+ * time: while a call with someone else is on, the button hangs that one up, so a call that
+ * got stuck never blocks a new one.
  */
 export function CallButton({ target }: { target: CallTarget }) {
   const phase = useCallStore((s) => s.state?.phase);
@@ -45,7 +46,7 @@ export function CallButton({ target }: { target: CallTarget }) {
   const label = inCall
     ? "Hang up"
     : busy
-      ? `You're in a call with ${otherName}; hang up there first`
+      ? `Hang up the call with ${otherName}`
       : `Call ${name}; the answers are spoken`;
   return (
     <Tooltip>
@@ -55,17 +56,16 @@ export function CallButton({ target }: { target: CallTarget }) {
             type="button"
             variant="ghost"
             size="icon-sm"
-            disabled={busy}
-            onClick={() => (inCall ? hangUp() : start(target))}
+            onClick={() => (inCall || busy ? hangUp() : start(target))}
             aria-label={label}
             aria-pressed={inCall}
             className={cn(
               "text-muted-foreground",
-              inCall &&
+              (inCall || busy) &&
                 "bg-status-failed/12 text-status-failed hover:bg-status-failed/20 hover:text-status-failed",
             )}
           >
-            {inCall ? <PhoneOff /> : <Phone />}
+            {inCall || busy ? <PhoneOff /> : <Phone />}
           </Button>
         </span>
       </TooltipTrigger>

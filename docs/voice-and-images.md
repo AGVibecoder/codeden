@@ -61,12 +61,12 @@ When an agent's turn completes, CodeDen can read its final message aloud.
 Talk with the orchestrator, or a project's project manager, hands-free.
 
 - **Start:** press the phone button next to the microphone in their message box, or say the wake word (below), which always calls the orchestrator.
-- **One call at a time:** while a call is on, the phone button elsewhere is greyed out ("hang up there first"). A panel at the bottom right shows what's happening (Listening, Working on it, Speaking) and the microphone level.
+- **One call at a time:** while a call is on, the phone button elsewhere turns red and hangs that call up ("Hang up the call with …"); starting a new call always ends the one before, so a call that got stuck never blocks you. A panel at the bottom right shows what's happening (Listening, Working on it, Speaking) and the microphone level.
 - **Talking:** the microphone stays on for the whole call. Each time you pause for about a second, what you said since the last pause goes to the orchestrator straight away, even while it is still working or speaking (it queues behind a running turn). Every answer it finishes is spoken with your read-aloud engine and voice (Chatterbox, ElevenLabs or the browser). Read-aloud doesn't need to be switched on for calls.
 - **Headset or speakers** (Settings → Voice → Dictation → **Calls**):
   - **Headset:** the microphone stays on during answers. As soon as a real word is heard the answer stops; coughs, sneezes, "uh" and "hmm" don't count and aren't sent.
   - **Speakers** (default): the microphone pauses while the orchestrator speaks, so it can't hear itself, and listens again when it's done. Anything you said before the answer started is still sent.
-- Messages sent during a call start with a short note asking the orchestrator to answer in a few spoken sentences, without markdown or code.
+- Messages sent during a call carry a hidden note telling the orchestrator its answer is read aloud: speak plainly, without markdown, tables or code blocks, describe lists and code in words, and take as long as the question needs. The note isn't shown in the chat; you see only what you said.
 - **Hang up** stops everything.
 - Listening uses your dictation engine. With a cloud engine (ElevenLabs, OpenAI), what you say in a call is sent to that service.
 - **Wake word:** Settings → Voice → Dictation → **Wake word** listens for a phrase ("Hey Annie" by default) while CodeDen is open, and starts a call when it hears it. Words said right after it are your first message. It only works with the Browser and Local (Whisper) engines, so nothing goes to a cloud service while you aren't in a call.
