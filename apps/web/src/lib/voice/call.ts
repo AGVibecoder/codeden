@@ -107,6 +107,8 @@ export class VoiceCall {
 
   /** Start the call; `first` is sent straight away (words said right after the wake word). */
   start(first?: string): void {
+    // Report the call straight away, so the panel and the hang-up button show before any words.
+    this.set({ phase: "listening" });
     this.stopReplies = this.deps.watchReplies((markdown) => void this.answer(markdown));
     this.listen();
     if (first?.trim()) void this.send(first.trim());
