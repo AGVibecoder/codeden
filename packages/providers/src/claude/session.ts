@@ -104,6 +104,7 @@ export class ClaudeSession implements ProviderSession {
   private readonly mcpStatus = new McpStatusRefresher({
     read: () => this.q?.mcpServerStatus(),
     report: (list) => this.mapper.reportMcpServers(list),
+    reconnect: (name) => this.q?.reconnectMcpServer(name),
   });
 
   constructor(
