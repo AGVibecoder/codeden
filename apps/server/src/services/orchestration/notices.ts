@@ -250,10 +250,10 @@ export class NoticeStore {
   }
 
   /**
-   * Undelivered notices for a target, oldest first. `projectId` null = the orchestrator. A
-   * scheduled wake-up counts once it is due.
+   * Undelivered notices for a target, oldest first (at most `limit`). `projectId` null = the
+   * orchestrator. A scheduled wake-up counts once it is due.
    */
-  undelivered(target: NoticeTarget, projectId: string | null): Notice[] {
+  undelivered(target: NoticeTarget, projectId: string | null, limit = 50): Notice[] {
     return this.db
       .select()
       .from(notices)
@@ -266,7 +266,7 @@ export class NoticeStore {
         ),
       )
       .orderBy(notices.createdAt)
-      .limit(50)
+      .limit(limit)
       .all()
       .map((r) => r.notice);
   }

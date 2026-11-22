@@ -1,4 +1,4 @@
-import { AutonomyLevel, type Project, ProviderId } from "@codeden/contracts";
+import { AutonomyLevel, GithubUpdatesLevel, type Project, ProviderId } from "@codeden/contracts";
 import { z } from "zod";
 import { defineTool, ToolError } from "../../define";
 import { projectFor } from "../shared/helpers";
@@ -17,6 +17,7 @@ function compactProject(p: Project) {
     autonomy: p.autonomy,
     autonomyMode: p.autonomyMode,
     agentCiEnv: p.agentCiEnv,
+    githubUpdates: p.githubUpdates,
   };
 }
 
@@ -70,7 +71,7 @@ export const createProject = defineTool({
 export const updateProject = defineTool({
   name: "update_project",
   description:
-    "Change a project's name, default provider, default autonomy level, timezone, default branch, or whether its agent sessions run with CI=true. Pass null to clear an override.",
+    "Change a project's name, default provider, default autonomy level, timezone, default branch, whether its agent sessions run with CI=true, or which GitHub activity reaches its PM. Pass null to clear an override.",
   roles: ["orchestrator"],
   scope: "global",
   input: z.object({
@@ -86,6 +87,9 @@ export const updateProject = defineTool({
       .describe(
         "false: agent sessions opened from now on run without CI=true (only when the user asks, e.g. their Playwright or Yarn setup misbehaves under CI)",
       ),
+    githubUpdates: GithubUpdatesLevel.optional().describe(
+      "Which GitHub activity wakes the PM and reaches its chat (only when the user asks): off (nothing), digest (a short summary in the PM's next turn), important (failed checks, change requests, merges and conflicts on PRs CodeDen opened; the default) or all (everything, at most one wake per 15 minutes)",
+    ),
   }),
   handler: async ({ projectId, ...patch }, { services }) => {
     projectFor(services, projectId);

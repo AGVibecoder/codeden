@@ -17,6 +17,19 @@ export const ProjectRemoteWarning = z.object({
 });
 export type ProjectRemoteWarning = z.infer<typeof ProjectRemoteWarning>;
 
+/**
+ * Which GitHub activity wakes a project's PM and reaches its chat (§8.2). Every level keeps the
+ * activity on the project page, where the orchestrator can look it up too.
+ * - `off`: nothing reaches the PM.
+ * - `digest`: nothing live; the PM's next turn gets a short summary.
+ * - `important` (the default): only news about the project's own work goes live (failed checks,
+ *   change requests, merges and merge conflicts on PRs that CodeDen sessions opened); the rest
+ *   is in the summary.
+ * - `all`: everything goes live, waking the PM at most once every 15 minutes for it.
+ */
+export const GithubUpdatesLevel = z.enum(["off", "digest", "important", "all"]);
+export type GithubUpdatesLevel = z.infer<typeof GithubUpdatesLevel>;
+
 const projectBase = {
   id: Id,
   name: z.string().min(1),
@@ -71,6 +84,11 @@ const projectBase = {
    * use `docker`. Defaults to `local` so events written before the setting existed still parse.
    */
   execution: ProjectExecution.prefault({}),
+  /**
+   * Which GitHub activity reaches the PM (`GithubUpdatesLevel`). Defaults to `important` so
+   * events written before the setting existed still parse.
+   */
+  githubUpdates: GithubUpdatesLevel.default("important"),
   /**
    * Pinned projects are listed above the rest (§13). Defaults to false so events written
    * before pinning existed still parse.

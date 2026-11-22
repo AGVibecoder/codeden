@@ -24,6 +24,7 @@ export const NoticeType = z.enum([
   "pr.checks_failed",
   "pr.checks_passed",
   "pr.merged",
+  "pr.conflicting",
   "review.submitted",
   "issue.opened",
   "automation.skipped",
@@ -35,6 +36,20 @@ export const NoticeType = z.enum([
   "sessions.cut_off",
 ]);
 export type NoticeType = z.infer<typeof NoticeType>;
+
+/**
+ * Notice types about GitHub activity: the project's GitHub updates level
+ * (`Project.githubUpdates`) decides whether they wake the PM and reach its chat.
+ */
+export const GITHUB_NOTICE_TYPES: ReadonlySet<NoticeType> = new Set<NoticeType>([
+  "pr.opened",
+  "pr.checks_failed",
+  "pr.checks_passed",
+  "pr.merged",
+  "pr.conflicting",
+  "review.submitted",
+  "issue.opened",
+]);
 
 const noticeBase = {
   id: Id,
@@ -127,6 +142,12 @@ export const Notice = z.discriminatedUnion("type", [
       /** Issues the PR closes. */
       linkedIssues: z.array(z.int().positive()),
     }),
+  }),
+  z.object({
+    ...noticeBase,
+    type: z.literal("pr.conflicting"),
+    /** A PR that a CodeDen session opened no longer merges cleanly into its base branch. */
+    data: z.object({ sessionId: Id.nullable(), pr: GitHubPrRef }),
   }),
   z.object({
     ...noticeBase,
