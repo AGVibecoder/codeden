@@ -15,6 +15,7 @@ type MockProjectApi = Pick<
   | "disconnectGithub"
   | "publishGithubPlan"
   | "publishGithub"
+  | "removeProject"
 >;
 
 const NOT_GITHUB =
@@ -200,6 +201,13 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
       } as Project;
       world.emitDomain({ type: "project.updated", sessionId: null, payload: { project } });
       return later({ project, url: `https://github.com/${req.owner}/${req.name}` }, 800);
+    },
+
+    // The mock has no folders: removing only takes the project out of the sidebar.
+    async removeProject(id, req) {
+      const current = find(id);
+      world.emitDomain({ type: "project.archived", sessionId: null, payload: { projectId: id } });
+      return later({ path: current.path, deletedFolder: req.deleteFolder, sessions: 0 }, 300);
     },
   };
 }

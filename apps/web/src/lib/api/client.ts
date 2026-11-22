@@ -34,6 +34,8 @@ import type {
   PublishGithubResponse,
   RefreshModelsResponse,
   RefreshProjectResponse,
+  RemoveProjectRequest,
+  RemoveProjectResponse,
   ResolveConflictRequestInit,
   ResolveConflictResponse,
   RestoreFilesRequest,
@@ -254,6 +256,11 @@ export interface CodeDenClient {
   publishGithubPlan(projectId: string): Promise<PublishGithubPlan>;
   /** Create the GitHub repository, commit if needed, push; the project becomes a GitHub one. */
   publishGithub(projectId: string, req: PublishGithubRequest): Promise<PublishGithubResponse>;
+  /**
+   * Take a project out of CodeDen: its sessions stop and are archived, it leaves the sidebar,
+   * and with `deleteFolder` its folder is deleted from disk, permanently.
+   */
+  removeProject(projectId: string, req: RemoveProjectRequest): Promise<RemoveProjectResponse>;
   readonly automations: AutomationsApi;
   /** Autonomy modes, the vision, the factory panel and kill switches (§10.1, experimental). */
   readonly factory: FactoryApi;

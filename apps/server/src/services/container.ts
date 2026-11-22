@@ -36,6 +36,7 @@ import { PluginHub } from "./plugins/hub";
 import { ProjectService } from "./projects/project-service";
 import { GithubPublisher } from "./projects/publish";
 import { ProjectRedetector } from "./projects/redetector";
+import { ProjectRemover } from "./projects/remove";
 import { ProviderHistoryService } from "./providers/history";
 import {
   isRemoteRunner,
@@ -195,6 +196,7 @@ export interface AppServices {
   plugins: PluginHub;
   /** Publishes a local project to GitHub (§9). */
   githubPublisher: GithubPublisher;
+  projectRemover: ProjectRemover;
   /** Orchestrator and PM sessions, digests, notices, conflicts (§8). */
   orchestration: OrchestrationService;
   /** GitHub connection, issue/PR sync, PRs and evidence (§9). */
@@ -586,6 +588,14 @@ export function createServices(opts: ServicesOptions): AppServices {
     }),
     plugins,
     githubPublisher: new GithubPublisher({ exec, projects, github }),
+    projectRemover: new ProjectRemover({
+      projects,
+      sessions: sessionRepo,
+      stopSession: (id) => sessions.stop(id),
+      archiveSession: (id, o) => worktreeCleanup.archive(id, o),
+      codedenHome: opts.paths.home,
+      userHome,
+    }),
     agentConfig: new AgentConfigService({
       home: userHome,
       projects,
