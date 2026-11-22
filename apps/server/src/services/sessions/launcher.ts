@@ -61,6 +61,8 @@ export interface LauncherDeps extends RunnerDeps {
   git?: GitBroker;
   /** Sandboxes for projects whose sessions run in containers (`docs/remote-runners.md` §8). */
   sandboxes?: Pick<SandboxService, "wants" | "place" | "release">;
+  /** Folders agents may write to outside the worktree (`settings.autonomy.writableFolders`). */
+  writableFolders?: () => string[];
 }
 
 /**
@@ -354,7 +356,9 @@ export class SessionLauncher {
    */
   sessionOptions(session: Session, mcpToken: string | null = null): SessionOptions {
     const project = this.projectOf(session);
-    const proxyUrl = runnerForSession(this.deps, session.id).mcpProxyUrl();
+    const runner = runnerForSession(this.deps, session.id);
+    const home = runner === this.deps.runner;
+    const proxyUrl = runner.mcpProxyUrl();
     const mcpServers: McpServerConfig[] = [];
     if (proxyUrl && mcpToken) {
       mcpServers.push({
@@ -382,6 +386,11 @@ export class SessionLauncher {
       codedenHome: this.deps.home,
       artifactsDir: this.deps.artifacts?.sessionDir(session.id),
       mcpServers,
+      // Folders the user lets agents write to outside the worktree (Settings › Autonomy). They
+      // are paths on this machine, so only sessions on the home runner get them.
+      ...(home && this.deps.writableFolders
+        ? { additionalDirectories: this.deps.writableFolders() }
+        : {}),
       ...(ownBranch(session) ? { ownBranch: ownBranch(session) } : {}),
       ...(project?.agentCiEnv === false ? { ciEnv: false } : {}),
     });

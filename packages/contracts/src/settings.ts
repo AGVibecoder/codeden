@@ -106,6 +106,12 @@ export const Settings = z.object({
   autonomy: z
     .object({
       default: AutonomyLevel.default("auto"),
+      /**
+       * Folders outside the worktree where agents may write without asking, at Auto and Full
+       * (absolute paths, `SessionOptions.additionalDirectories`). Writes elsewhere, registry and
+       * environment changes, and secrets access still ask.
+       */
+      writableFolders: z.array(z.string().min(1).max(500)).max(32).default([]),
     })
     .prefault({}),
   providers: z
