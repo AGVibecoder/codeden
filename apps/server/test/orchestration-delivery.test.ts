@@ -136,8 +136,10 @@ describe("notice delivery (§8.2)", () => {
     expect(turn.input.text).not.toContain("#8");
     turn.delivered?.();
     expect(notices.undelivered("pm", "p1")).toEqual([]);
-    // Only the live notice becomes a card in the chat.
-    expect(add.mock.calls.map(([, list]) => ids(list))).toEqual([["live"]]);
+    // The live notice becomes a card, the summarized one a folded card; the hidden one neither.
+    expect(add.mock.calls.map(([, list, folded]) => [ids(list), ids(folded ?? [])])).toEqual([
+      [["live"], ["sum"]],
+    ]);
     add.mockRestore();
   });
 

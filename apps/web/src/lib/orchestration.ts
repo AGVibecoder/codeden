@@ -60,6 +60,8 @@ export interface FoldedMessage {
   status: string | null;
   /** The "Updates since your last turn" list (without the `<codeden_updates>` tags). */
   updates: string | null;
+  /** The short GitHub summary the project's GitHub updates level sends instead of live notices. */
+  github: string | null;
   /** What the sender actually wrote. */
   text: string;
   /** The message is an automatic wake-up for notices, not something a person typed. */
@@ -68,11 +70,13 @@ export interface FoldedMessage {
 
 const STATUS_RE = /^\s*<codeden_status\b[^>]*>[\s\S]*?<\/codeden_status>\s*/;
 const UPDATES_RE = /^<codeden_updates\b[^>]*>([\s\S]*?)<\/codeden_updates>\s*/;
+const GITHUB_RE = /^\s*<codeden_github_summary\b[^>]*>([\s\S]*?)<\/codeden_github_summary>\s*/;
 const UPDATES_HEAD = "Updates since your last turn:";
 const WAKE_PREFIX = "Automatic wake-up for the updates above.";
 
 /**
- * Split a role-session user message into the injected status, updates and the real text.
+ * Split a role-session user message into the injected status, updates, GitHub summary and the
+ * real text.
  * The server wraps both injected blocks in tags; messages sent before the updates had tags
  * fall back to `legacyUpdatesEnd`.
  */
@@ -94,9 +98,15 @@ export function foldDigest(raw: string): FoldedMessage {
     updates = rest.slice(0, end).trim();
     rest = rest.slice(end);
   }
+  let github: string | null = null;
+  const summary = GITHUB_RE.exec(rest);
+  if (summary) {
+    github = (summary[1] ?? "").trim();
+    rest = rest.slice(summary[0].length);
+  }
   // A message from a voice call carries a note for the agent, which the transcript leaves out.
   const text = rest.replace(VOICE_RE, "").trim();
-  return { status, updates, text, wake: text.startsWith(WAKE_PREFIX) };
+  return { status, updates, github, text, wake: text.startsWith(WAKE_PREFIX) };
 }
 
 /** The voice-call note, and the plain one calls added before it was in tags. */

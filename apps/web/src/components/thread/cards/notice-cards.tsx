@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   BellOff,
   CheckCircle2,
+  ChevronRight,
   CircleDot,
   Factory,
   GitMerge,
@@ -27,6 +28,7 @@ import {
   Unplug,
   XCircle,
 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { githubUpdatesLabel, quieterLevel } from "@/components/orchestration/github-updates";
 import { ProjectTile } from "@/components/shell/sidebar/project-group";
@@ -38,10 +40,10 @@ import { useProject } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 /** The typed notices of an `orchestration_notices` item, or null for other notices. */
-export function noticeBatchOf(item: ItemOf<"notice">): Notice[] | null {
+export function noticeBatchOf(item: ItemOf<"notice">): NoticeBatchData | null {
   if (item.code !== NOTICE_BATCH_CODE) return null;
   const parsed = NoticeBatchData.safeParse(item.data);
-  return parsed.success ? parsed.data.notices : null;
+  return parsed.success ? parsed.data : null;
 }
 
 const look: Record<NoticeType, { icon: LucideIcon; tone: string; label: string }> = {
@@ -198,8 +200,15 @@ function MuteGithubButton({ projectId }: { projectId: string }) {
   );
 }
 
-/** Notices delivered with a wake (§8.2), rendered as compact typed cards. */
-export function NoticeBatchCard({ notices }: { notices: Notice[] }) {
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/**
+ * Notices delivered with a wake (§8.2), rendered as compact typed cards. GitHub activity the
+ * agent only got as a summary sits folded underneath, opened on a click.
+ */
+export function NoticeBatchCard({ batch }: { batch: NoticeBatchData }) {
+  const { notices, summarized } = batch;
+  const [open, setOpen] = useState(false);
   const githubProject = notices.find(
     (n) => GITHUB_NOTICE_TYPES.has(n.type) && n.projectId,
   )?.projectId;
@@ -208,13 +217,27 @@ export function NoticeBatchCard({ notices }: { notices: Notice[] }) {
       className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border bg-card"
       data-testid="notice-batch"
     >
-      <div className="flex items-center bg-muted/30 px-3 py-1.5 text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
-        {notices.length} {notices.length === 1 ? "update" : "updates"} since the last turn
-        {githubProject && <MuteGithubButton projectId={githubProject} />}
-      </div>
+      {notices.length > 0 && (
+        <div className="flex items-center bg-muted/30 px-3 py-1.5 text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
+          {plural(notices.length, "update")} since the last turn
+          {githubProject && <MuteGithubButton projectId={githubProject} />}
+        </div>
+      )}
       {notices.map((n) => (
         <NoticeRow key={n.id} notice={n} />
       ))}
+      {summarized.length > 0 && (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-1 bg-muted/30 px-3 py-1.5 text-3xs font-semibold tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
+        >
+          <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
+          {plural(summarized.length, "GitHub update")} in the summary
+        </button>
+      )}
+      {open && summarized.map((n) => <NoticeRow key={n.id} notice={n} />)}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  */
 export function DigestDisclosure({ folded }: { folded: FoldedMessage }) {
   const [open, setOpen] = useState(false);
-  if (!folded.status && !folded.updates) return null;
+  if (!folded.status && !folded.updates && !folded.github) return null;
   // One notice per `- (type)` entry; a quoted notice text can span several lines.
   const updates = folded.updates?.match(/^- \(/gm)?.length ?? 0;
   return (
@@ -31,7 +31,7 @@ export function DigestDisclosure({ folded }: { folded: FoldedMessage }) {
       </button>
       {open && (
         <pre className="mt-1.5 max-h-80 w-full overflow-auto rounded-lg border border-border bg-surface px-3 py-2 font-mono text-3xs leading-relaxed whitespace-pre-wrap text-muted-foreground scroll-thin">
-          {[folded.status, folded.updates].filter(Boolean).join("\n\n")}
+          {[folded.status, folded.updates, folded.github].filter(Boolean).join("\n\n")}
         </pre>
       )}
     </div>

@@ -84,8 +84,8 @@ export class NoticeDelivery {
         .filter((n) => !this.claimed.has(n.id));
       const where = (kind: NoticePresentation) =>
         pending.filter((n) => this.deps.presentation(n) === kind);
-      // Live notices in full (and as cards), the rest of the GitHub activity as one summary;
-      // hidden ones (GitHub updates off) only count as delivered.
+      // Live notices in full (and as cards), the rest of the GitHub activity as one summary
+      // (its cards folded); hidden ones (GitHub updates off) only count as delivered.
       const live = where("live").slice(0, MAX_LIVE);
       const summary = where("summary");
       if (live.length > 0) parts.push(renderNotices(live, this.deps.projectName));
@@ -93,7 +93,7 @@ export class NoticeDelivery {
       parts.push(input.text);
       const ids = [...live, ...summary, ...where("hidden")].map((n) => n.id);
       for (const id of ids) this.claimed.add(id);
-      if (live.length > 0) this.deps.cards.add(session.id, live);
+      if (live.length + summary.length > 0) this.deps.cards.add(session.id, live, summary);
       const release = () => {
         for (const id of ids) this.claimed.delete(id);
       };

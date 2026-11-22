@@ -58,7 +58,12 @@ const notice: Notice = {
 describe("orchestration contracts (§8)", () => {
   it("round-trips typed notices, batches and their events", () => {
     expect(Notice.parse(notice)).toEqual(notice);
-    expect(NoticeBatchData.parse({ notices: [notice] })).toEqual({ notices: [notice] });
+    expect(NoticeBatchData.parse({ notices: [notice] })).toEqual({
+      notices: [notice],
+      summarized: [],
+    });
+    const folded = { notices: [], summarized: [notice] };
+    expect(NoticeBatchData.parse(folded)).toEqual(folded);
     const event = { seq: 1, sessionId: null, ts, type: "notice.created", payload: { notice } };
     expect(EventEnvelope.parse(event)).toEqual(event);
     const delivered = {
@@ -168,7 +173,7 @@ describe("orchestration contracts (§8)", () => {
     expect(Notice.parse(JSON.parse(JSON.stringify(held)))).toEqual(held);
     const anonymous = { ...held, data: { fromSessionId: null, text: "Status?" } };
     expect(Notice.parse(anonymous)).toEqual(anonymous);
-    expect(NoticeBatchData.parse({ notices: [held] })).toEqual({ notices: [held] });
+    expect(NoticeBatchData.parse({ notices: [held] })).toEqual({ notices: [held], summarized: [] });
     expect(() => Notice.parse({ ...held, data: { text: "missing sender" } })).toThrow();
   });
 
