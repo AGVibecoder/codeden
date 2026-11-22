@@ -36,7 +36,7 @@ export function WritableFoldersRow() {
   return (
     <SettingRow
       label="Folders agents may write to"
-      help="Writes inside these folders don't ask, in Auto and Full, from the next action of every session, running ones included. Writes anywhere else, Windows registry and environment changes, and secrets access still ask."
+      help="In Auto, writes inside these folders don't ask, from the next action of every session, running ones included; writes anywhere else, Windows registry and environment changes, and secrets access still ask. Full writes anywhere without asking."
       stacked
     >
       <div className="flex flex-col gap-2">

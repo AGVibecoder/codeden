@@ -131,14 +131,14 @@ describe("today's approvals", () => {
     expect(policy.gate("Bash", { command }).ask).toBe(true);
   });
 
-  it("pnpm e2e > /c/Users/me/scratch-ref/…: correct, still asks (outside the worktree, not temp)", () => {
+  it("pnpm e2e > /c/Users/me/scratch-ref/…: asks at Auto (outside the worktree, not temp), not at Full", () => {
     const command =
       'pnpm e2e > /c/Users/me/scratch-ref/e2e-run.log 2>&1; echo "EXIT=$?" >> /c/Users/me/scratch-ref/e2e-run.log';
     expect(verdict(command, { ...worktree("cc2cd882"), shell: "posix" })).toBe(
       "outside_worktree: Writes /c/Users/me/scratch-ref/e2e-run.log, outside the worktree",
     );
     const full = new ClaudePolicy("full", worktree("cc2cd882"));
-    expect(full.gate("Bash", { command }).ask).toBe(true);
+    expect(full.gate("Bash", { command }).ask).toBe(false);
   });
 
   it("Write to %TEMP%\\codeden-issue6: asked (outside the worktree), now allowed (temp)", () => {

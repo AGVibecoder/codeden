@@ -169,9 +169,9 @@ export class ClaudePolicy {
       return { ask: false };
     }
     if (!risk.risky) return { ask: false };
-    if (this.autonomy === "full" && risk.action !== "outside_worktree" && !asksAtEveryLevel(risk)) {
-      return { ask: false };
-    }
+    // Full never asks, writes outside the worktree included; only what every level asks about
+    // (CodeDen's own credentials, agent CLIs' logins, agents' allow-lists) still does.
+    if (this.autonomy === "full" && !asksAtEveryLevel(risk)) return { ask: false };
     return { ask: true, action: risk.action, reason: risk.reason };
   }
 

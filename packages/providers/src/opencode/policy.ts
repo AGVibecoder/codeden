@@ -172,7 +172,8 @@ export class OpenCodePolicy {
     }
     if (!risk.risky) return ALLOW;
     const always = alwaysRisky || asksAtEveryLevel(risk);
-    if (this.autonomy === "full" && risk.action !== "outside_worktree" && !always) return ALLOW;
+    // Full never asks, writes outside the worktree included, except what every level asks about.
+    if (this.autonomy === "full" && !always) return ALLOW;
     return { kind: "ask", action: risk.action, reason: risk.reason };
   }
 

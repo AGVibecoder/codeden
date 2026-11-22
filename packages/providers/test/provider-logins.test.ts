@@ -211,11 +211,9 @@ describe("provider login files: reads, copies and archives ask at every level", 
     });
   });
 
-  it("deleting a login asks at every level, as a delete outside the worktree", () => {
+  it("deleting a login asks at every level, Full included", () => {
     for (const command of ["rm ~/.codex/auth.json", "rm -rf ~/.claude"]) {
-      expect(classifyCommand(command, posix), command).toMatchObject({
-        action: "outside_worktree",
-      });
+      expect(classifyCommand(command, posix), command).toMatchObject({ always: true });
       expect(new ClaudePolicy("full", posix).gate("Bash", { command }).ask, command).toBe(true);
     }
   });

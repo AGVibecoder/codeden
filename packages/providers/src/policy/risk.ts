@@ -18,7 +18,7 @@ import {
   scriptBlockWords,
   unwrap,
 } from "./command-words";
-import { classifyDelete } from "./deletes";
+import { classifyDelete, wipingDelete } from "./deletes";
 import { downloadWrites } from "./downloads";
 import { dumpsEnvironment } from "./env-dumps";
 import { type ListOutput, namesOnly } from "./env-names";
@@ -39,7 +39,12 @@ import {
   SHELL_DRIVES,
 } from "./paths";
 import { projectConfigCommand, projectConfigWrite } from "./project-config";
-import { loginRisk, providerLoginCommand, touchesProviderLogin } from "./provider-logins";
+import {
+  isAgentSettingsFile,
+  loginRisk,
+  providerLoginCommand,
+  touchesProviderLogin,
+} from "./provider-logins";
 import { keptWords } from "./ps-assignments";
 import { registryChange, registryExports } from "./registry";
 import { pipesDownloadIntoInterpreter } from "./remote-scripts";
@@ -84,7 +89,8 @@ export function classifyCommand(command: string, ctx: RiskContext): RiskAssessme
   const always =
     firstInList(list, ctx, 0, codedenCommand) ??
     firstInList(list, ctx, 0, (cmd, here) => providerLoginCommand(cmd, here)) ??
-    firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here));
+    firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here)) ??
+    firstInList(list, ctx, 0, (cmd, here) => wipingDelete(cmd, here));
   if (always) return always;
   if (
     /\b(iex|invoke-expression)\b[^|]*\b(irm|iwr|invoke-restmethod|invoke-webrequest|downloadstring)\b/i.test(
@@ -339,8 +345,8 @@ function copyTargets(bin: string, args: string[], dest: string, ctx: RiskContext
 /**
  * Classify a file write/edit. The worktree, extra roots and OS temp are fine, secrets files in
  * the worktree included: writing one (`cp .env.example .env`) reads nothing. A secrets file in
- * temp counts as outside the worktree, so Full autonomy (which only asks for writes outside the
- * worktree) still asks for it. CodeDen's own home (its credential files, and anything else
+ * temp counts as outside the worktree. Full never asks for a write outside the worktree, except
+ * over an agent CLI's login or its own settings file. CodeDen's own home (its credential files, and anything else
  * outside the session's own worktree there) and agents' own allow-lists (`./agent-permissions`)
  * ask at every level. CodeDen's project config (`./project-config`) asks at Auto. On Windows a
  * PowerShell drive's item (`HKCU:\…`, `Cert:\…`, or a relative path after a `cd` there) is never
@@ -358,8 +364,20 @@ export function classifyWrite(target: string, ctx: RiskContext): RiskAssessment 
   if (access) return credentialsRisk(`Writes ${CODEDEN_WHAT[access]}: ${target}`);
   const permissions = agentPermissionsWrite(target, ctx);
   if (permissions) return permissions;
-  if (!isWritable(target, ctx))
+  if (!isWritable(target, ctx)) {
+    // Full writes anywhere without asking, but never over an agent CLI's login (it would log
+    // the user out) or its own settings (an allow rule there skips CodeDen's checks for every
+    // later session).
+    if (touchesProviderLogin(target, ctx) || isAgentSettingsFile(target, ctx)) {
+      return {
+        risky: true,
+        action: "outside_worktree",
+        reason: `Writes ${target}, an agent's login or settings`,
+        always: true,
+      };
+    }
     return risky("outside_worktree", `Writes ${target}, outside the worktree`);
+  }
   if (isSecretPath(target) && !isInWorkspace(target, ctx)) {
     return risky("outside_worktree", `Writes the secrets file ${target}, outside the worktree`);
   }

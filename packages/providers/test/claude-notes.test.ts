@@ -85,19 +85,25 @@ describe("ClaudePolicy with notes folders", () => {
   });
 
   it("still asks for Claude's settings, credentials and secrets in the notes folders", () => {
-    for (const level of ["auto", "full"] as const) {
-      const p = new ClaudePolicy(level, ctx);
-      for (const file_path of [
-        "/home/me/.claude/settings.json",
-        "/home/me/.claude/.credentials.json",
-        "/home/me/.claude/projects/-home-me-other/memory/MEMORY.md",
-        "/home/me/.claude/plans/.env",
-      ]) {
-        expect(p.gate("Write", { file_path }), `${level}: ${file_path}`).toMatchObject({
-          ask: true,
-          action: "outside_worktree",
-        });
-      }
+    const outsideNotes = [
+      "/home/me/.claude/settings.json",
+      "/home/me/.claude/.credentials.json",
+      "/home/me/.claude/projects/-home-me-other/memory/MEMORY.md",
+      "/home/me/.claude/plans/.env",
+    ];
+    const auto = new ClaudePolicy("auto", ctx);
+    for (const file_path of outsideNotes) {
+      expect(auto.gate("Write", { file_path }), file_path).toMatchObject({
+        ask: true,
+        action: "outside_worktree",
+      });
+    }
+    // Full asks only for Claude's login and its own settings.
+    const full = new ClaudePolicy("full", ctx);
+    for (const file_path of outsideNotes) {
+      expect(full.gate("Write", { file_path }).ask, file_path).toBe(
+        !file_path.includes("memory") && !file_path.endsWith(".env"),
+      );
     }
     expect(
       new ClaudePolicy("supervised", ctx).gate("Write", {

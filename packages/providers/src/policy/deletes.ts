@@ -1,6 +1,14 @@
 import { type RiskAssessment, risky, SAFE } from "./assessment";
 import { binName, unwrap } from "./command-words";
-import { isWritable, type PathContext, providerPath, SHELL_DRIVES } from "./paths";
+import {
+  homeOf,
+  isInside,
+  isWritable,
+  type PathContext,
+  providerPath,
+  resolveAgainst,
+  SHELL_DRIVES,
+} from "./paths";
 import { type SimpleCommand, wordPaths } from "./shell";
 
 /**
@@ -124,6 +132,33 @@ export function classifyDelete(
     }
   }
   return SAFE;
+}
+
+/**
+ * A delete that would wipe a whole drive or the user's home folder (the filesystem root, a
+ * drive, the home folder or a folder above it, or a wildcard emptying one): asked at every
+ * level, Full included, which otherwise never asks (§11.2). Looked for across the whole command
+ * first (`classifyCommand`), so an earlier risk Full allows can't hide it.
+ */
+export function wipingDelete(cmd: SimpleCommand, ctx: PathContext): RiskAssessment | undefined {
+  const { tokens } = unwrap(cmd.words);
+  const targets = deletedPaths(cmd, binName(tokens[0]), tokens.slice(1)) ?? [];
+  const home = homeOf(ctx);
+  for (const target of targets) {
+    const bare = target.replace(/[\\/]\*(\.\*)?$/, "") || "/";
+    if (providerPath(bare, ctx)) continue;
+    const drive = /^[\\/]$/.test(bare) || /^[a-z]:[\\/]?$/i.test(bare);
+    const abs = drive ? bare : resolveAgainst(bare, ctx);
+    if (drive || (home && isInside(home, abs, ctx))) {
+      return {
+        risky: true,
+        action: "outside_worktree",
+        reason: `Deletes ${target}, a whole drive or your home folder`,
+        always: true,
+      };
+    }
+  }
+  return undefined;
 }
 
 /**
