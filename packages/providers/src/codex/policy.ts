@@ -25,7 +25,7 @@ import type { RequestPermissionProfile } from "./protocol/v2";
 export function levelAllows(autonomy: AutonomyLevel, risk: RiskAssessment): boolean {
   if (autonomy === "auto") return !risk.risky;
   if (autonomy === "full") {
-    return !risk.risky || (risk.action !== "outside_worktree" && !asksAtEveryLevel(risk));
+    return !risk.risky || !asksAtEveryLevel(risk);
   }
   return false;
 }

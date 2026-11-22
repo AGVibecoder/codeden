@@ -45,12 +45,10 @@ describe("OpenCode policy", () => {
     expect(p.decide(other("webfetch", ["https://example.com"]))).toEqual({ kind: "allow" });
   });
 
-  it("full: only writes outside the worktree ask; secrets reads still ask", () => {
+  it("full: writes outside the worktree run too; secrets reads still ask", () => {
     const p = policy("full");
     expect(p.decide(shell("git push --force"))).toEqual({ kind: "allow" });
-    expect(p.decide(edit(path.resolve("/etc/hosts")))).toMatchObject({
-      action: "outside_worktree",
-    });
+    expect(p.decide(edit(path.resolve("/etc/hosts")))).toEqual({ kind: "allow" });
     expect(p.decide(other("read", [".env"]))).toMatchObject({ kind: "ask", action: "secrets" });
   });
 

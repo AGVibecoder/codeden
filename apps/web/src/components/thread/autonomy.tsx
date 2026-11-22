@@ -34,7 +34,8 @@ export const AUTONOMY: Record<
   full: {
     label: "Full",
     short: "Full",
-    description: "Never asks.",
+    description:
+      "Never asks, outside the worktree too. Only an agent's login and wiping a drive still ask.",
     icon: ShieldOff,
     tone: "text-status-waiting",
   },

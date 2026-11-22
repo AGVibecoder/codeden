@@ -83,6 +83,28 @@ export function providerLoginFolders(ctx: PathContext): string[] {
   return folders.map((dir) => resolveAgainst(dir, ctx));
 }
 
+/** Settings files in an agent CLI's own folder that can grant it permissions or skip approvals. */
+const AGENT_SETTINGS = new Set(["settings.json", "settings.local.json", "config.toml"]);
+
+/**
+ * True when `target` is an agent CLI's own settings file in its config folder (Claude's
+ * `~/.claude/settings.json`, Codex's `~/.codex/config.toml`, …): an allow rule or approval
+ * policy written there turns CodeDen's checks off for every later session, so writing one asks
+ * at every level, Full included.
+ */
+export function isAgentSettingsFile(target: string, ctx: PathContext): boolean {
+  if (!target.trim()) return false;
+  const p = pathApi(ctx);
+  const folders = providerLoginFolders(ctx);
+  return expandLocation(target, ctx).some((value) => {
+    const abs = resolveAgainst(value, ctx);
+    return (
+      AGENT_SETTINGS.has(p.basename(abs).toLowerCase()) &&
+      folders.some((folder) => samePath(folder, p.dirname(abs), ctx))
+    );
+  });
+}
+
 /** A location variable at the start of a path, in POSIX, PowerShell (`${env:X}` too) or cmd form. */
 const LOCATION_VAR = /^(?:\$\{(?:env:)?(\w+)\}|\$env:(\w+)|\$(\w+)|%(\w+)%)(?=$|[\\/])/i;
 
@@ -156,9 +178,22 @@ function wildcardReaches(abs: string, folders: string[], ctx: PathContext): bool
   return candidates.some((candidate) => pattern.test(slashes(candidate)));
 }
 
+/** Commands that delete a file or folder. */
+const DELETES = new Set([
+  "rm",
+  "rmdir",
+  "del",
+  "erase",
+  "rd",
+  "remove-item",
+  "ri",
+  "unlink",
+  "shred",
+]);
+
 /**
- * Commands that move into, create or delete a folder or file: none reads what is in it. Deleting
- * a login asks as a delete outside the worktree, at every level.
+ * Commands that move into, create or delete a folder or file: none reads what is in it.
+ * Deleting a login asks at every level (`DELETES`).
  */
 const NO_READ = new Set([
   "cd",
@@ -194,6 +229,14 @@ export function providerLoginCommand(
   if (item) return loginRisk(`Reads an agent CLI's login: ${item}`);
   const { tokens } = unwrap(cmd.words);
   const bin = binName(tokens[0]);
+  if (DELETES.has(bin)) {
+    // Deleting one logs the user out of that agent: asked at every level, Full included.
+    const gone = tokens
+      .slice(1)
+      .flatMap((word) => wordPaths(cmd, word))
+      .find((path) => touchesProviderLogin(path, ctx));
+    return gone ? loginRisk(`Deletes an agent CLI's login: ${gone}`) : undefined;
+  }
   if (NO_READ.has(bin)) return undefined;
   const found = secretArgument(
     bin,

@@ -536,7 +536,8 @@ describe("the OS temp directory", () => {
     expect(action("rm -rf *")).toBeNull();
     expect(action("cd /tmp/scratch && rm -rf *")).toBeNull();
     expect(action("cd /tmp && rm -rf *")).toBe("outside_worktree");
-    expect(action("cd ~ && rm -rf *")).toBe("outside_worktree");
+    // Emptying the home folder deletes the agent CLIs' logins too: asked at every level.
+    expect(action("cd ~ && rm -rf *")).not.toBeNull();
     expect(action("cd .. && rm -rf *")).toBe("outside_worktree");
   });
 

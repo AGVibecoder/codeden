@@ -125,12 +125,11 @@ describe("Claude autonomy changes on a live session", () => {
     expect(await permission("Bash", forcePush)).toMatchObject({ behavior: "allow" });
     expect(approvals()).toHaveLength(0);
 
-    // Writes outside the worktree and temp still ask.
-    expect(await preToolUse("Write", writeOutside)).toBe("ask");
-    void permission("Write", writeOutside);
+    // Writes outside the worktree and temp don't ask at Full either.
+    expect(await preToolUse("Write", writeOutside)).toBe("none");
+    expect(await permission("Write", writeOutside)).toMatchObject({ behavior: "allow" });
     await settle();
-    expect(approvals()).toHaveLength(1);
-    expect(approvals()[0]).toMatchObject({ item: { action: "outside_worktree" } });
+    expect(approvals()).toHaveLength(0);
   });
 
   it("keeps approvals that were already waiting, and asks for nothing new", async () => {

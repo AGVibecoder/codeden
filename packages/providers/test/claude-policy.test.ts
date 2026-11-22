@@ -66,35 +66,42 @@ describe("ClaudePolicy", () => {
     expect(p.gate("Read", { file_path: "/work/repo/.env.local" })).toMatchObject({
       action: "secrets",
     });
-    // Writing one outside the worktree asks too, under Full as well.
+    // Writing one outside the worktree asks at Auto; Full never asks for a write.
     expect(p.gate("Write", { file_path: "/home/me/.npmrc" })).toMatchObject({
       action: "outside_worktree",
     });
-    expect(new ClaudePolicy("full", ctx).gate("Write", { file_path: "/tmp/.env" }).ask).toBe(true);
+    expect(new ClaudePolicy("full", ctx).gate("Write", { file_path: "/tmp/.env" }).ask).toBe(false);
   });
 
-  it("full asks only for writes outside the worktree (temp counts as inside, but not its secrets)", () => {
+  it("full never asks for writes, outside the worktree included, but guards logins and wipes", () => {
     const p = new ClaudePolicy("full", ctx);
     expect(p.gate("Bash", { command: "git push --force" }).ask).toBe(false);
     expect(p.gate("Bash", { command: "npm i -g x" }).ask).toBe(false);
-    expect(p.gate("Write", { file_path: "/etc/x" })).toMatchObject({
-      ask: true,
-      action: "outside_worktree",
-    });
+    expect(p.gate("Write", { file_path: "/etc/x" }).ask).toBe(false);
     expect(p.gate("Write", { file_path: "/tmp/x/probe.ts" }).ask).toBe(false);
     expect(p.gate("Bash", { command: "pnpm build > /tmp/build.log" }).ask).toBe(false);
-    // Inside the worktree nothing asks, secrets included (§11.2).
+    expect(p.gate("Bash", { command: "cat > /home/me/notes/fix.py <<'EOF'\nx\nEOF" }).ask).toBe(
+      false,
+    );
+    expect(p.gate("Bash", { command: "rm -rf /home/me/other-project/dist" }).ask).toBe(false);
     expect(p.gate("Read", { file_path: ".env" }).ask).toBe(false);
-    expect(p.gate("Write", { file_path: ".env" }).ask).toBe(false);
-    // A secrets file in temp is still outside the worktree.
-    expect(p.gate("Write", { file_path: "/tmp/.env" })).toMatchObject({
-      ask: true,
-      action: "outside_worktree",
-    });
-    expect(p.gate("Bash", { command: "cp .env /tmp/x/.env" })).toMatchObject({
-      ask: true,
-      action: "outside_worktree",
-    });
+    expect(p.gate("Write", { file_path: "/tmp/.env" }).ask).toBe(false);
+    // Still asked at Full: an agent's login or own settings, and wiping a drive or the home folder.
+    for (const file_path of [
+      "/home/me/.claude/.credentials.json",
+      "/home/me/.claude/settings.json",
+    ]) {
+      expect(p.gate("Write", { file_path }).ask, file_path).toBe(true);
+    }
+    for (const command of [
+      "rm -rf /",
+      "rm -rf ~",
+      "rm -rf /home",
+      "git push --force; rm -rf /home/me/*",
+      "rm ~/.codex/auth.json",
+    ]) {
+      expect(p.gate("Bash", { command }).ask, command).toBe(true);
+    }
   });
 
   it("resolves relative paths from a shell directory Claude reports in Git Bash form (Windows)", () => {
@@ -119,14 +126,11 @@ describe("ClaudePolicy", () => {
       }
       expect(p.gate("Bash", { command: "cp a.ts ../../a.ts.bak" }, sub).ask).toBe(false);
       expect(p.gate("Bash", { command: "rm -rf /tmp/scratch" }, "/tmp").ask).toBe(false);
-      expect(p.gate("Bash", { command: "rm -rf ../abcd9999" }, dir)).toMatchObject({
-        ask: true,
-        action: "outside_worktree",
-      });
-      expect(p.gate("Bash", { command: "cp a.ts ../../../../b.ts" }, sub)).toMatchObject({
-        ask: true,
-        action: "outside_worktree",
-      });
+      // Outside the worktree: Auto asks, Full doesn't.
+      expect(p.gate("Bash", { command: "rm -rf ../abcd9999" }, dir).ask).toBe(level === "auto");
+      expect(p.gate("Bash", { command: "cp a.ts ../../../../b.ts" }, sub).ask).toBe(
+        level === "auto",
+      );
     }
   });
 
@@ -148,7 +152,7 @@ describe("ClaudePolicy", () => {
     expect(p.level).toBe("full");
     expect(p.gate("Bash", push).ask).toBe(false);
     expect(p.needsUser("Bash", push).ask).toBe(false);
-    expect(p.gate("Bash", outside)).toMatchObject({ ask: true, action: "outside_worktree" });
+    expect(p.gate("Bash", outside).ask).toBe(false);
 
     p.setAutonomy("supervised");
     expect(p.gate("Bash", { command: "ls" }).ask).toBe(true);

@@ -97,11 +97,16 @@ describe("Codex requests under CodeDen's policy (§11.2)", () => {
     expect(asked).toBe(true);
   });
 
-  it("under Full asks only for writes outside the worktree", async () => {
-    for (const cmd of ["git push --force origin main", "cat .env", "npm i -g x"]) {
+  it("under Full never asks, writes outside the worktree included, but wiping the home folder does", async () => {
+    for (const cmd of [
+      "git push --force origin main",
+      "cat .env",
+      "npm i -g x",
+      "rm -rf /home/me/projects",
+    ]) {
       expect((await decide(command(cmd), "full")).asked, cmd).toBe(false);
     }
-    expect((await decide(command("rm -rf /home/me/projects"), "full")).asked).toBe(true);
+    expect((await decide(command("rm -rf /home/me"), "full")).asked).toBe(true);
   });
 
   it("asks for everything under Supervised and Read-only", async () => {
@@ -124,8 +129,11 @@ describe("Codex requests under CodeDen's policy (§11.2)", () => {
       false,
     );
     expect((await decide(patch("/home/me"), "auto")).asked).toBe(true);
-    expect((await decide(patch(), "full", ["/home/me/.bashrc"])).asked).toBe(true);
-    expect((await decide(patch(), "full", [])).asked).toBe(true);
+    expect((await decide(patch(), "full", ["/home/me/.bashrc"])).asked).toBe(false);
+    expect((await decide(patch(), "full", ["/home/me/.codex/config.toml"])).asked).toBe(true);
+    // Files Codex didn't name: Auto asks, Full doesn't.
+    expect((await decide(patch(), "auto", [])).asked).toBe(true);
+    expect((await decide(patch(), "full", [])).asked).toBe(false);
 
     const permissions = (p: object) => ({
       method: "item/permissions/requestApproval",
@@ -177,7 +185,7 @@ describe("Codex requests under CodeDen's policy (§11.2)", () => {
           "full",
         )
       ).asked,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("puts Full on on-request, so escalations reach the policy instead of failing", () => {
