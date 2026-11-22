@@ -6,6 +6,7 @@ import { useTranscriptsStore } from "@/stores/transcripts";
 import { type CodeDenClient, useClient } from "./api";
 import { sessionLoader } from "./session-batch";
 import type { TranscriptState } from "./transcript/reducer";
+import { staleRunningTurn } from "./transcript/stale";
 
 export const snapshotKey = ["snapshot"] as const;
 
@@ -202,8 +203,28 @@ export function useTranscript(
     });
   }, [client, queryClient, sessionId, seq]);
   const transcript = useTranscriptsStore((s) => (sessionId ? s.byId[sessionId] : undefined));
+  // Self-repair: a turn still shown running after the session came to rest means a live update
+  // was lost. Give the update a moment to arrive, then reload the transcript, once per turn.
+  const status = useSnapshotData(
+    (s) => s.sessions.find((x) => x.id === sessionId)?.status,
+    undefined,
+  );
+  const stale = staleRunningTurn(transcript, status);
+  const repaired = useRef(new Set<string>());
+  useEffect(() => {
+    if (!sessionId || !stale || repaired.current.has(stale)) return;
+    const timer = setTimeout(() => {
+      repaired.current.add(stale);
+      resynced.current = true;
+      void queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    }, STALE_TURN_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [queryClient, sessionId, stale]);
   return { transcript, isLoading: query.isLoading, error: query.error };
 }
+
+/** How long a turn may still show running after its session came to rest before a reload. */
+export const STALE_TURN_GRACE_MS = 3_000;
 
 /** The root turns before a loaded transcript's earliest one, and loading them a page at a time. */
 export interface EarlierTurns {
