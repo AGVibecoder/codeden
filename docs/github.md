@@ -90,6 +90,18 @@ Browser screenshots taken with `browser_screenshot` can go straight into evidenc
 
 A folder without a GitHub remote gets sessions, worktrees, checkpoints, diffs, the workbench and automations that don't need GitHub. GitHub lists are simply empty, and no GitHub request is ever made for it. Templates marked `requiresGithub` (issue triage, stale PR follow-up) aren't offered, and the factory modes need a GitHub project.
 
+### Publish to GitHub
+
+**Publish to GitHub** on a local project's home page turns it into a GitHub project in one go. Pick the owner (your account or one of your organizations), the repository name and Private (default) or Public. The dialog first shows what will happen, and nothing changes until you press **Publish**:
+
+- A folder that isn't a git repository yet gets one (`main` branch).
+- For an Unreal, Unity, Node.js or Python project without a `.gitignore`, CodeDen adds one that leaves out generated files: for Unreal, `Binaries`, `Intermediate`, `Saved` and `DerivedDataCache`. `.env` files are always left out.
+- Unreal and Unity assets (`.uasset`, `.umap`, `.fbx`, `.wav`, …) are stored with **Git LFS**, since GitHub refuses files over 100 MB. That needs Git LFS installed; the dialog says so when it isn't.
+- With no commits yet, a first commit takes every file that isn't ignored; the dialog shows about how many files and how many MB. Files over 100 MB that Git LFS doesn't cover stop it, named, so you can remove or ignore them. Your git name is used for the commit, or your GitHub account's no-reply address when git has none.
+- The repository is created on GitHub, set as `origin`, and pushed, with your GitHub token passed to git in its environment (never on a command line). A big project can take a while.
+
+A folder that already has an `origin` remote can't be published this way. Then the project is checked again and becomes a GitHub project.
+
 ### When a folder gets a GitHub remote later
 
 A project's git checkout and GitHub remote (`origin`) are detected when you add it, and checked again:

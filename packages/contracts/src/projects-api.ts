@@ -58,6 +58,55 @@ export type RefreshProjectResponse = z.infer<typeof RefreshProjectResponse>;
 export const DisconnectGithubResponse = z.object({ project: Project });
 export type DisconnectGithubResponse = z.infer<typeof DisconnectGithubResponse>;
 
+/** The largest file GitHub accepts in a push; bigger ones must go through Git LFS. */
+export const GITHUB_MAX_FILE_BYTES = 100 * 1024 * 1024;
+
+/**
+ * `GET /api/projects/:id/publish-github` response: what publishing a local project to GitHub
+ * would do, for the dialog to show before anything changes.
+ */
+export const PublishGithubPlan = z.object({
+  /** The folder is a git repository already; when false, one is created. */
+  isGitRepo: z.boolean(),
+  /** It has at least one commit; when false, a first commit of every file not ignored is made. */
+  hasCommits: z.boolean(),
+  /** The kind of project found, for its `.gitignore` and Git LFS patterns. */
+  template: z.enum(["unreal", "unity", "node", "python"]).nullable(),
+  /** A `.gitignore` for `template` is written (the folder has none). */
+  addsGitignore: z.boolean(),
+  /** Patterns tracked with Git LFS (`.gitattributes`), such as `*.uasset`. */
+  lfsPatterns: z.array(z.string()),
+  /** Files the first commit takes and their total size; null when the folder has commits. */
+  files: z.int().nonnegative().nullable(),
+  bytes: z.number().nonnegative().nullable(),
+  /** Files over `GITHUB_MAX_FILE_BYTES` that Git LFS doesn't cover: publishing is refused. */
+  tooLarge: z.array(z.string()).max(50),
+  /** Why it can't be published right now (an `origin` already set, GitHub not connected). */
+  blocked: z.string().nullable(),
+  /** Who can own the new repository: the signed-in account first, then its organizations. */
+  owners: z.array(z.string()),
+  /** A repository name suggested from the project's name. */
+  suggestedName: z.string(),
+});
+export type PublishGithubPlan = z.infer<typeof PublishGithubPlan>;
+
+/** `POST /api/projects/:id/publish-github`: create the repository, commit if needed, push. */
+export const PublishGithubRequest = z.object({
+  owner: z.string().trim().min(1).max(100),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z0-9._-]+$/, "Letters, digits, '.', '-' and '_' only"),
+  private: z.boolean().default(true),
+});
+export type PublishGithubRequest = z.infer<typeof PublishGithubRequest>;
+
+/** The project, now a GitHub project, and the new repository's page. */
+export const PublishGithubResponse = z.object({ project: Project, url: z.string() });
+export type PublishGithubResponse = z.infer<typeof PublishGithubResponse>;
+
 /**
  * `GET /api/projects/:id/checks` response: the project's checks (§9 Project checks) as a new
  * session would freeze them now, read from `.codeden/project.json` in the project's own folder.

@@ -34,6 +34,7 @@ import {
 import type { AutomationPort, GithubPort } from "./orchestration/ports";
 import { PluginHub } from "./plugins/hub";
 import { ProjectService } from "./projects/project-service";
+import { GithubPublisher } from "./projects/publish";
 import { ProjectRedetector } from "./projects/redetector";
 import { ProviderHistoryService } from "./providers/history";
 import {
@@ -192,6 +193,8 @@ export interface AppServices {
   agentConfig: AgentConfigService;
   /** The plugin hub: MCP servers agents switch on when they need them (§12.4). */
   plugins: PluginHub;
+  /** Publishes a local project to GitHub (§9). */
+  githubPublisher: GithubPublisher;
   /** Orchestrator and PM sessions, digests, notices, conflicts (§8). */
   orchestration: OrchestrationService;
   /** GitHub connection, issue/PR sync, PRs and evidence (§9). */
@@ -582,6 +585,7 @@ export function createServices(opts: ServicesOptions): AppServices {
       backupDir: join(opts.paths.backups, "files"),
     }),
     plugins,
+    githubPublisher: new GithubPublisher({ exec, projects, github }),
     agentConfig: new AgentConfigService({
       home: userHome,
       projects,

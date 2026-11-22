@@ -4,6 +4,9 @@ import {
   checksOf,
   type ProjectChecksResponse,
   ProjectCommandsQuery,
+  type PublishGithubPlan,
+  PublishGithubRequest,
+  type PublishGithubResponse,
   ReorderProjectsRequest,
   type SessionFileList,
   type SlashCommandList,
@@ -68,6 +71,14 @@ export function projectRoutes(s: AppServices) {
     .post("/:id/refresh", async (c) => c.json(await s.redetector.refresh(c.req.param("id"))))
     .post("/:id/disconnect-github", async (c) =>
       c.json(await s.projects.disconnectGithub(c.req.param("id"))),
+    )
+    .get("/:id/publish-github", async (c) =>
+      c.json<PublishGithubPlan>(await s.githubPublisher.plan(c.req.param("id"))),
+    )
+    .post("/:id/publish-github", jsonBody(PublishGithubRequest), async (c) =>
+      c.json<PublishGithubResponse>(
+        await s.githubPublisher.publish(c.req.param("id"), c.req.valid("json")),
+      ),
     )
     .delete("/:id", (c) => {
       s.projects.archive(c.req.param("id"));

@@ -19,6 +19,8 @@ import {
   Project,
   ProjectChecksResponse,
   ProviderHistoryResponse,
+  PublishGithubPlan,
+  PublishGithubResponse,
   RefreshModelsResponse,
   RefreshProjectResponse,
   RemoteImageGrant,
@@ -192,6 +194,10 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
       post(`/projects/${enc(id)}/refresh`, {}, (v) => RefreshProjectResponse.parse(v)),
     disconnectGithub: (id) =>
       post(`/projects/${enc(id)}/disconnect-github`, {}, (v) => DisconnectGithubResponse.parse(v)),
+    publishGithubPlan: (id) =>
+      get(`/projects/${enc(id)}/publish-github`, (v) => PublishGithubPlan.parse(v)),
+    publishGithub: (id, req) =>
+      post(`/projects/${enc(id)}/publish-github`, req, (v) => PublishGithubResponse.parse(v)),
     automations: httpAutomationsApi(http),
     factory: httpFactoryApi(http),
 

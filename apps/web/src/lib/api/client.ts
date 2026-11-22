@@ -29,6 +29,9 @@ import type {
   Project,
   ProjectCheck,
   ProviderHistoryResponse,
+  PublishGithubPlan,
+  PublishGithubRequest,
+  PublishGithubResponse,
   RefreshModelsResponse,
   RefreshProjectResponse,
   ResolveConflictRequestInit,
@@ -247,6 +250,10 @@ export interface CodeDenClient {
   refreshProject(projectId: string): Promise<RefreshProjectResponse>;
   /** Make a GitHub project local-only, once its folder no longer has a GitHub `origin`. */
   disconnectGithub(projectId: string): Promise<DisconnectGithubResponse>;
+  /** What publishing a local project to GitHub would do (§9). */
+  publishGithubPlan(projectId: string): Promise<PublishGithubPlan>;
+  /** Create the GitHub repository, commit if needed, push; the project becomes a GitHub one. */
+  publishGithub(projectId: string, req: PublishGithubRequest): Promise<PublishGithubResponse>;
   readonly automations: AutomationsApi;
   /** Autonomy modes, the vision, the factory panel and kill switches (§10.1, experimental). */
   readonly factory: FactoryApi;
