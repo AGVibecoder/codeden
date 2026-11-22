@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import type { CodeDenClient } from "@/lib/api";
 import type { OrchestrationRole } from "@/lib/api/feature-apis";
+import { voiceMessage } from "@/lib/orchestration";
 import { snapshotKey } from "@/lib/queries";
 import { onLiveEvent } from "@/lib/realtime";
 import { transcriptFromSnapshot } from "@/lib/transcript/reducer";
@@ -20,13 +21,6 @@ import { stt as browserStt } from "@/lib/voice/engines";
 import { latestCompletedRootTurn, turnJustFinished } from "@/lib/voice/read-aloud";
 import { cancelSpeech, speak } from "@/lib/voice/speak";
 import { stripForSpeech } from "@/lib/voice/speech-text";
-
-/**
- * Put in front of what you say in a call, so the orchestrator answers the way a voice call
- * needs: short and without anything that can't be spoken.
- */
-export const CALL_HINT =
-  "(Voice call: answer in one to three short spoken sentences, without markdown, lists or code.)";
 
 /** Who a call is with: the orchestrator, or a project's project manager. */
 export interface CallTarget {
@@ -52,7 +46,7 @@ interface CallStore {
   target: CallTarget | null;
   /** Microphone level while listening (0..1). */
   level: number | null;
-  /** Start a call; does nothing while another call is on (only one runs at a time). */
+  /** Start a call; one still on ends first (only one runs at a time). */
   start: (target: CallTarget, first?: string) => void;
   hangUp: () => void;
 }
@@ -119,7 +113,9 @@ export const useCallStore = create<CallStore>()((set) => ({
   target: null,
   level: null,
   start(target, first) {
-    if (!deps || callActive()) return;
+    if (!deps) return;
+    // One call at a time: a call still on (or stuck) ends before the new one starts.
+    if (callActive()) current?.hangUp();
     const { client, queryClient } = deps;
     const settings = queryClient.getQueryData<Snapshot>(snapshotKey)?.settings;
     if (!settings) return;
@@ -147,7 +143,7 @@ export const useCallStore = create<CallStore>()((set) => ({
         await client.orchestration.send(
           target.role,
           target.role === "pm" ? target.projectId : null,
-          { text: `${CALL_HINT}\n\n${text}` },
+          { text: voiceMessage(text) },
           "queue",
         );
       },
