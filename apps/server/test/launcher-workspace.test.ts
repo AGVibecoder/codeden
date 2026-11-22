@@ -55,6 +55,24 @@ const prepared = () => {
   return call;
 };
 
+describe("the orchestrator's folder", () => {
+  it("follows CodeDen's home when it moved, instead of failing on the old folder", async () => {
+    const session = env.addSession({
+      role: "orchestrator",
+      projectId: null,
+      status: "idle",
+      cwd: join(env.dir, "old-home", "orchestrator"),
+      worktreePath: null,
+      branch: null,
+    });
+    await launcher.resume(env.repo.get(session.id), { text: "hi", attachments: [] });
+    const start = calls.find((c) => c.name === "session.start");
+    const now = join(env.dir, "orchestrator");
+    expect(start?.name === "session.start" && start.options.cwd).toBe(now);
+    expect(env.repo.get(session.id).cwd).toBe(now);
+  });
+});
+
 describe("new worktrees of a GitHub project", () => {
   it("fetch first, so they can start from the up-to-date default branch", async () => {
     const session = env.addSession({ status: "starting", worktreePath: null, branch: null });
