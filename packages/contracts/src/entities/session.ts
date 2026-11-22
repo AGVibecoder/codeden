@@ -12,6 +12,7 @@ import {
   Role,
   Timestamp,
 } from "../common";
+import { SessionCutOff } from "../cut-off";
 import { Item } from "../items";
 import { McpServerState } from "../mcp-status";
 import { StartedBy, workFields } from "../work";
@@ -25,7 +26,8 @@ import { SessionResult } from "../workbench";
  * - `running`: a turn is in progress.
  * - `waiting`: blocked on the user (approval or question).
  * - `idle`: between turns, ready for input.
- * - `interrupted`: cut off (runner restart, crash); resumable.
+ * - `interrupted`: cut off (runner restart, crash, usage limit); resumable. With `cutOff` set it
+ *   waits for someone to continue it (§4.2).
  * - `completed` / `failed` / `stopped`: terminal.
  */
 export const SessionStatus = z.enum([
@@ -154,6 +156,12 @@ export const Session = z.object({
    * a provider without the capability or a session that hasn't started.
    */
   mcpServers: z.array(McpServerState).nullable().optional(),
+  /**
+   * Set while the session is cut off and waits to be continued (§4.2 *Cut-off sessions*): why
+   * it stopped, and when a usage limit resets. Cleared by its next turn. Absent or null: not
+   * cut off.
+   */
+  cutOff: SessionCutOff.nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   endedAt: Timestamp.nullable(),

@@ -234,7 +234,7 @@ describe("MCP tokens across restarts (#208)", () => {
     expect(await initializeStatus(stoppedToken)).toBe(401);
   }, 60_000);
 
-  it("a session cut off by an upgrade is reopened with a token CodeDen accepts", async () => {
+  it("a session cut off by an upgrade is reopened on Continue with a token CodeDen accepts", async () => {
     const before = heldFake({ hold: false });
     await boot(before);
     await addProject();
@@ -245,65 +245,46 @@ describe("MCP tokens across restarts (#208)", () => {
     await stopAll();
     const after = heldFake({ hold: false });
     await boot(after);
-    // Recovery reopens the cut-off turn with a "continue" message and a fresh token.
+    // Recovery marks the turn cut off and reopens nothing; Continue reopens it.
+    await waitUntil(() => current().services.sessionRepo.get(id).cutOff ?? undefined);
+    expect(after.last(id)).toBeUndefined();
+    await current().services.cutOffs.continue(id, { mode: "now" });
     const reopened = await waitUntil(() => after.last(id));
-    await waitUntil(() => status(id) === "idle", 30_000);
+    await waitUntil(() => hosted(id));
+    // The agent calls CodeDen's tools with its new token while it works on the briefing (which
+    // quotes the long task, so the turn is stopped rather than waited for).
     expect(await reportProgress(reopened.token, "after an upgrade")).toBeTruthy();
+    await current().services.sessions.stop(id);
     // The old provider process is gone, and its token with it.
     expect(await initializeStatus(oldToken)).toBe(401);
   }, 60_000);
 
-  it("a session reopened by a message while recovery is busy keeps a valid token", async () => {
+  it("a cut-off session reopened by a message is opened once, with a valid token", async () => {
     await boot(heldFake({ hold: false }));
     await addProject();
     const a = await startSession(LONG);
     const b = await startSession(LONG);
     await waitUntil(() => status(a) === "running" && status(b) === "running");
 
-    // An upgrade: both restart. Reopening a conversation takes a real provider a while.
+    // An upgrade: both are cut off.
     await stopAll();
-    const fake = heldFake({ hold: true });
+    const fake = heldFake({ hold: false });
     await boot(fake);
-    // Recovery reopens the cut-off sessions one at a time; the first is still opening.
-    const recovering = await waitUntil(() => fake.opens[0]);
-    const other = recovering.sessionId === a ? b : a;
-    // Meanwhile the factory messages the other session's agent (say, to re-review a pull
-    // request's new head), which reopens it.
-    void current()
-      .services.sessions.send(
-        other,
-        {
-          input: { text: "Re-review the pull request's head.", attachments: [] },
-          whenBusy: "queue",
-        },
-        "factory",
-      )
-      .catch(() => undefined);
-    const live = await waitUntil(() => fake.opens.find((o) => o.sessionId === other));
-
-    // Recovery moves on to the other session, which the runner doesn't host yet. Wait for the
-    // pass to end, or for it to open the conversation a second time.
-    recovering.release();
-    let recovered = false;
-    const runnerId = current().runner?.status.runnerId ?? undefined;
-    void current()
-      .services.recovery.onRunnerReady(runnerId)
-      .then(() => {
-        recovered = true;
-      });
-    const duplicate = await waitUntil(() =>
-      recovered ? null : fake.opens.filter((o) => o.sessionId === other)[1],
+    const repo = () => current().services.sessionRepo;
+    await waitUntil(() => (repo().get(a).cutOff && repo().get(b).cutOff ? true : undefined));
+    // The factory messages one agent (say, to re-review a pull request's new head), which
+    // reopens it; the other waits for its Continue.
+    await current().services.sessions.send(
+      a,
+      { input: { text: "Re-review the pull request's head.", attachments: [] }, whenBusy: "queue" },
+      "factory",
     );
-    live.release();
-    // A conversation has one writer at a time (Codex refuses a second app-server on a thread).
-    duplicate?.refuse(new Error("thread already has an active writer"));
-    await waitUntil(() => hosted(other));
-
-    // The agent working on the factory's message calls CodeDen's tools with its token.
+    const live = await waitUntil(() => fake.opens.find((o) => o.sessionId === a));
+    await waitUntil(() => hosted(a));
     expect(await initializeStatus(live.token)).toBe(200);
     expect(await reportProgress(live.token, "verdict ready")).toBeTruthy();
-    // It was opened once: the message reopened it, and recovery left it to that.
-    expect(duplicate).toBeNull();
-    await waitUntil(() => status(other) === "idle", 30_000);
+    expect(fake.opens.filter((o) => o.sessionId === a)).toHaveLength(1);
+    expect(fake.opens.filter((o) => o.sessionId === b)).toHaveLength(0);
+    expect(repo().get(b).cutOff?.reason).toBeDefined();
   }, 60_000);
 });

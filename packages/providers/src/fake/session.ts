@@ -194,8 +194,10 @@ export class FakeSession implements ProviderSession {
         return;
       }
       // Classified failures: `[fail:transient]` (an overloaded API) and `[fail:usage]` (a usage
-      // limit that resets a second later).
-      if (prompt.includes("[fail:transient]") || prompt.includes("[fail:usage]")) {
+      // limit that resets a second later). CodeDen's briefing, which quotes the task, doesn't
+      // fail again.
+      const scripted = input.from !== "codeden";
+      if (scripted && (prompt.includes("[fail:transient]") || prompt.includes("[fail:usage]"))) {
         await this.step(turn);
         const usage = prompt.includes("[fail:usage]");
         this.emit({

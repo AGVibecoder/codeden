@@ -350,7 +350,7 @@ export async function reviewerStalled(
  * started), not the work: a fresh reviewer starts on the fallback, never the same provider, and
  * the failure uses neither a revise round nor the reviewer's restarts. A usage limit, sign-in
  * problem or CLI too old also keeps other factory work off that provider for a while. Its
- * session, which may be waiting to retry after the limit resets, is stopped.
+ * session, which may be waiting for the limit to reset (cut off, §4.2), is stopped.
  */
 async function reviewerProviderFailed(
   ctx: FactoryContext,
@@ -360,7 +360,7 @@ async function reviewerProviderFailed(
   cause: ProviderCause,
 ): Promise<FactoryLoop> {
   if (providerWide(cause)) ctx.sessions.providerFailed(s.provider, cause);
-  if (s.status === "idle") await ctx.sessions.stop(s.id);
+  if (s.status === "idle" || s.status === "interrupted") await ctx.sessions.stop(s.id);
   const name = ctx.sessions.displayName(s.provider);
   ctx.log?.(`factory: ${item.id}: reviewer on ${s.provider} failed (${cause.reason})`);
   ctx.store.updateItem(item.id, (i) => ({

@@ -8,12 +8,7 @@ import {
 } from "@codeden/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { TurnRecord } from "../src/events/reducer/types";
-import {
-  AutoRetry,
-  continueMessage,
-  inAbout,
-  planRetry,
-} from "../src/services/sessions/auto-retry";
+import { AutoRetry, inAbout, planRetry } from "../src/services/sessions/auto-retry";
 import { sampleSession } from "./helpers";
 import { createGithubEnv, type GithubEnv } from "./support/github-env";
 import { MemoryProjection } from "./support/memory-projection";
@@ -41,21 +36,32 @@ describe("the reducer leaves passing failures of agent sessions to auto-retry", 
       { type: "turn.started", threadId: T, turnId: "u1" },
       { type: "turn.failed", threadId: T, turnId: "u1", error },
     );
-    return { status: p.session().status, inbox: [...p.inbox.values()].map((i) => i.kind) };
+    return {
+      status: p.session().status,
+      inbox: [...p.inbox.values()].map((i) => i.kind),
+      cutOff: p.session().cutOff ?? null,
+    };
   };
 
-  it("keeps the session idle with no inbox item for transient failures and usage limits", () => {
-    expect(fail("agent", transient)).toEqual({ status: "idle", inbox: [] });
-    expect(fail("agent", usage("2026-11-10T20:00:00.000Z"))).toEqual({ status: "idle", inbox: [] });
+  it("keeps the session idle with no inbox item for transient failures", () => {
+    expect(fail("agent", transient)).toEqual({ status: "idle", inbox: [], cutOff: null });
+  });
+
+  it("cuts an agent off at a usage limit, waiting for the reset, with no inbox item", () => {
+    const resets = "2026-11-10T20:00:00.000Z";
+    expect(fail("agent", usage(resets))).toMatchObject({
+      status: "interrupted",
+      inbox: [],
+      cutOff: { reason: "usage_limit", turnId: "u1", resetsAt: resets, continueWhenReset: false },
+    });
   });
 
   it("fails everything else, and role sessions, at once", () => {
-    expect(fail("agent", { message: "boom" })).toEqual({ status: "failed", inbox: ["run_failed"] });
-    expect(fail("agent", { message: "x", kind: "auth" })).toEqual({
-      status: "failed",
-      inbox: ["run_failed"],
-    });
-    expect(fail("pm", transient)).toEqual({ status: "failed", inbox: ["run_failed"] });
+    const failed = { status: "failed", inbox: ["run_failed"], cutOff: null };
+    expect(fail("agent", { message: "boom" })).toEqual(failed);
+    expect(fail("agent", { message: "x", kind: "auth" })).toEqual(failed);
+    expect(fail("pm", transient)).toEqual(failed);
+    expect(fail("pm", usage("2026-11-10T20:00:00.000Z"))).toEqual(failed);
   });
 });
 
@@ -76,7 +82,7 @@ describe("planRetry", () => {
     usage: null,
   });
   const session = { ...sampleSession, status: "idle" as const, rootThreadId: T };
-  const opts = { enabled: true, delaysMs: [20_000, 90_000, 300_000], usageMarginMs: 60_000 };
+  const opts = { enabled: true, delaysMs: [20_000, 90_000, 300_000] };
   const at = "2026-11-10T10:00:00.000Z";
   const t0 = Date.parse(at);
 
@@ -91,19 +97,6 @@ describe("planRetry", () => {
     expect(planRetry(session, three, opts)).toMatchObject({ attempt: 3, at: t0 + 300_000 });
     const four = [turn("u5", at, transient), ...three];
     expect(planRetry(session, four, opts)).toMatchObject({ action: "give_up", exhausted: true });
-  });
-
-  it("waits a minute past a usage limit's reset, and gives up without a reset time", () => {
-    const resets = "2026-11-10T15:00:00.000Z";
-    expect(planRetry(session, [turn("u2", at, usage(resets))], opts)).toMatchObject({
-      action: "retry",
-      at: Date.parse(resets) + 60_000,
-    });
-    const unknown = { message: "limit", kind: "usage_limit" as const };
-    expect(planRetry(session, [turn("u2", at, unknown)], opts)).toMatchObject({
-      action: "give_up",
-      exhausted: false,
-    });
   });
 
   it("does nothing once a newer turn ran, the session isn't idle, or it's an orchestrator", () => {
@@ -122,16 +115,10 @@ describe("planRetry", () => {
     ).toMatchObject({ action: "give_up", exhausted: false });
   });
 
-  it("words the wait and the continue message", () => {
+  it("words the wait", () => {
     expect(inAbout(20_000)).toBe("in 20s");
     expect(inAbout(90_000)).toBe("in 2 min");
     expect(inAbout(2 * 3_600_000 + 15 * 60_000)).toBe("in about 2 h 15 min");
-    expect(continueMessage(transient)).toBe(
-      "Previous turn stopped (API overloaded (529)); continue where you left off.",
-    );
-    expect(continueMessage(usage(at))).toBe(
-      "Previous turn stopped (usage limit reached); continue where you left off.",
-    );
   });
 });
 
@@ -149,11 +136,11 @@ describe("AutoRetry", () => {
       repo: env.repo,
       inbox: env.inbox,
       settings: () => settings,
+      briefing: async (session, error) => `briefing for ${session.id}: ${error.message}`,
       send: async (sessionId, input) => {
         sent.push({ sessionId, input });
       },
       delaysMs: [30, 30, 30],
-      usageMarginMs: 10,
     });
 
   beforeEach(() => {
@@ -199,14 +186,14 @@ describe("AutoRetry", () => {
   };
   const runFailed = () => env.inbox.list().filter((i) => i.kind === "run_failed");
 
-  it("continues the session after a transient failure, and says so in the transcript", async () => {
+  it("retries the session with its briefing after a transient failure, and says so", async () => {
     const id = newSession();
     const turnId = failTurn(id, transient);
     await until(() => sent.length === 1);
     expect(sent[0]).toEqual({
       sessionId: id,
       input: {
-        text: "Previous turn stopped (API overloaded (529)); continue where you left off.",
+        text: `briefing for ${id}: API overloaded (529)`,
         attachments: [],
         from: "codeden",
       },
@@ -233,19 +220,16 @@ describe("AutoRetry", () => {
     expect(notice(id, last)?.message).toBe("Stopped retrying after 3 automatic retries.");
   });
 
-  it("waits for a usage limit to reset", async () => {
+  it("leaves a usage limit alone: the session is cut off, not retried", async () => {
     const id = newSession();
-    const resets = new Date(Date.now() + 300).toISOString();
-    const turnId = failTurn(id, usage(resets));
-    await wait(100);
+    failTurn(id, usage(new Date(Date.now() + 50).toISOString()));
+    await wait(150);
     expect(sent).toHaveLength(0);
-    expect(notice(id, turnId)?.message).toMatch(
-      /^Usage limit reached\. CodeDen continues the session/,
-    );
-    await until(() => sent.length === 1);
-    expect(sent[0]?.input.text).toBe(
-      "Previous turn stopped (usage limit reached); continue where you left off.",
-    );
+    expect(retry.pending()).toEqual([]);
+    expect(env.repo.get(id)).toMatchObject({
+      status: "interrupted",
+      cutOff: { reason: "usage_limit" },
+    });
   });
 
   it("is cancelled by a message from the user, or by Stop", async () => {
@@ -256,6 +240,7 @@ describe("AutoRetry", () => {
       repo: env.repo,
       inbox: env.inbox,
       settings: () => settings,
+      briefing: async () => "briefing",
       send: async (sessionId, input) => {
         sent.push({ sessionId, input });
       },

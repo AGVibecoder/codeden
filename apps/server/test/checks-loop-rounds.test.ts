@@ -1,6 +1,5 @@
 import { agentEventToNewEvent } from "@codeden/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { RESTART_CONTINUE_MESSAGE } from "../src/services/sessions/recovery";
 import {
   CHECKS,
   type ChecksEnv,
@@ -12,6 +11,9 @@ import {
   user,
   wait,
 } from "./support/checks-env";
+
+/** What a Continue sends (its briefing), as far as the checks loop is concerned. */
+const BRIEFING = "Your work in this session was cut off.";
 
 /**
  * The checks loop's round count (#412): only a new user message (or switching the loop off and
@@ -58,23 +60,24 @@ describe("the checks loop's round count (#412)", () => {
     expect(c.env.repo.get(id).status).toBe("idle");
   });
 
-  it("starts no new round after a restart's continue at the cap", async () => {
+  it("starts no new round after a cut-off session's Continue at the cap", async () => {
     const id = await atTheCap();
-    await c.sessions.continueAfterRestart(id, RESTART_CONTINUE_MESSAGE);
+    await c.sessions.continueWith(id, BRIEFING);
     await settle(4);
     expect(rounds()).toEqual([1, 2]);
   });
 
-  it("keeps counting through a usage limit and auto-retry's continue", async () => {
+  it("keeps counting through a usage limit and the Continue after it", async () => {
     const id = c.newSession();
-    // The agent's fix turn for round 1 hits a usage limit; auto-retry continues it.
+    // The agent's fix turn for round 1 hits a usage limit and is cut off; Continue resumes it.
     c.turnEnds.push(usageLimit());
     c.turn(id, user("Add the feature"));
+    await until(() => c.env.repo.get(id).status === "interrupted");
+    await c.sessions.continueWith(id, BRIEFING);
     await until(() => c.sends().length >= 3);
     const [round1, resume, next] = c.sends();
     expect(round1?.checksRound).toBe(1);
-    expect(resume).toMatchObject({ from: "codeden" });
-    expect(resume?.text).toContain("usage limit reached");
+    expect(resume).toMatchObject({ from: "codeden", text: BRIEFING });
     expect(resume?.checksRound).toBeUndefined();
     // The checks after the continued turn are still round 1's, so the next message is round 2.
     expect(c.card(id, "u3")?.data.round).toBe(1);
@@ -96,7 +99,7 @@ describe("the checks loop's round count (#412)", () => {
     await c.sessions.update(id, { untilChecksPass: true });
     expect(c.env.repo.get(id).checks?.round).toBeUndefined();
     // A turn CodeDen starts itself (not a compaction, which runs no checks) runs them again.
-    await c.sessions.continueAfterRestart(id, RESTART_CONTINUE_MESSAGE);
+    await c.sessions.continueWith(id, BRIEFING);
     await until(() => rounds().length === 3);
     expect(c.card(id, "u4")?.data.round).toBe(0);
     expect(rounds()).toEqual([1, 2, 1]);

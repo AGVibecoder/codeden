@@ -13,6 +13,7 @@ import type {
   ProjectRemoteWarning,
   QueueSender,
   SessionChecks,
+  SessionCutOff,
   SessionResult,
   StartedBy,
   TurnKind,
@@ -139,6 +140,8 @@ export const sessions = sqliteTable(
     startError: json<ErrorInfo>("start_error"),
     /** The MCP servers' live state as the provider last reported it (`Session.mcpServers`). */
     mcpServers: json<McpServerState[]>("mcp_servers"),
+    /** Why the session is cut off and waits to be continued (`Session.cutOff`, §4.2). */
+    cutOff: json<SessionCutOff>("cut_off"),
   },
   (t) => [
     index("sessions_project").on(t.projectId),

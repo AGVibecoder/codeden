@@ -110,9 +110,6 @@ function recovery() {
   const sessions = {
     launching: new Map<string, Promise<void>>(),
     isDelivering: () => false,
-    continueAfterRestart: vi.fn(async (id: string, text: string) => {
-      continued.push([id, text]);
-    }),
     releaseOutboxes: () => undefined,
     sessionsWithQueuedMessages: () => [...queued],
     flushOutbox: vi.fn(async (id: string) => {
@@ -129,17 +126,26 @@ function recovery() {
     }),
     providers: () => [{ id: "fake", capabilities: { resume: true, compact: true } }],
   } as unknown as RunnerPort;
+  // Marking a session cut off is the only thing recovery does to a cut-off work turn.
+  const cutOffs = {
+    mark: (id: string, reason: string) => {
+      continued.push([id, reason]);
+      return env.repo.update(id, (x) => ({ ...x, status: "interrupted" }));
+    },
+    announce: () => undefined,
+  };
   const r = new SessionRecovery({
     repo: env.repo,
     sessions,
     launcher: { fail } as unknown as SessionLauncher,
+    cutOffs,
     runner,
   });
   return { recovery: r, continued, flushed, queued, fail };
 }
 
 describe("a compaction cut off by a runner restart", () => {
-  it("after a runner crash, is not continued with 'continue where you left off'", async () => {
+  it("after a runner crash, goes idle instead of being cut off", async () => {
     const s = compactingSession();
     const t = recovery();
 
@@ -153,7 +159,7 @@ describe("a compaction cut off by a runner restart", () => {
     expect(env.repo.get(s.id).status).toBe("idle");
   });
 
-  it("after a runner drain, is not continued with 'continue where you left off'", async () => {
+  it("after a runner drain, goes idle instead of being cut off", async () => {
     const s = compactingSession();
     // The draining runner interrupts the compaction and closes the provider process.
     agent(s.id, { type: "turn.interrupted", threadId: T, turnId: "c1", reason: "runner_restart" });
@@ -186,14 +192,13 @@ describe("a compaction cut off by a runner restart", () => {
     expect(t.flushed).toEqual([s.id]);
   });
 
-  it("a work turn cut off by a restart is still continued", async () => {
+  it("a work turn cut off by a restart is marked cut off, and nothing continues it", async () => {
     const s = workingSession();
     const t = recovery();
 
     await t.recovery.onRunnerReady();
 
-    expect(t.continued).toEqual([
-      [s.id, "You were interrupted by a CodeDen restart; continue where you left off."],
-    ]);
+    expect(t.continued).toEqual([[s.id, "crash"]]);
+    expect(t.flushed).toEqual([]);
   });
 });

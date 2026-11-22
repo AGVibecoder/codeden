@@ -1,6 +1,8 @@
 import {
   ArchiveSessionRequest,
   type CompactSessionResponse,
+  ContinueSessionRequest,
+  type ContinueSessionResponse,
   EditQueuedMessageRequest,
   ForkSessionRequest,
   type ForkSessionResponse,
@@ -27,8 +29,8 @@ import { exportSessionTranscript } from "../services/sessions/transcript-export"
 import { jsonBody, queryOf } from "./validate";
 
 /**
- * `/api/sessions`: start (with conflict handling), message, steer, interrupt, compact, respond, stop,
- * fork, handoff, review, export as Markdown, archive (removes the worktree, §9), unarchive and the
+ * `/api/sessions`: start (with conflict handling), message, steer, interrupt, compact, continue,
+ * respond, stop, fork, handoff, review, export as Markdown, archive (removes the worktree, §9), unarchive and the
  * queued-message tray. `installToken` is hidden from exports wherever it appears.
  */
 export function sessionRoutes(s: AppServices, installToken: string) {
@@ -66,6 +68,14 @@ export function sessionRoutes(s: AppServices, installToken: string) {
       // "Compact now": the provider compacts the conversation as a turn of its own; 409 when it can't.
       .post("/:id/compact", async (c) => {
         const body: CompactSessionResponse = await s.sessions.compact(c.req.param("id"));
+        return c.json(body);
+      })
+      // A cut-off session (§4.2): continue it with its briefing, or opt in to the usage reset.
+      .post("/:id/continue", jsonBody(ContinueSessionRequest), async (c) => {
+        const body: ContinueSessionResponse = await s.cutOffs.continue(
+          c.req.param("id"),
+          c.req.valid("json"),
+        );
         return c.json(body);
       })
       .post("/:id/respond", jsonBody(RespondRequest), async (c) => {

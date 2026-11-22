@@ -275,7 +275,7 @@ function transcriptLine(item: Item, root: string | null): string[] {
  * wrote it, anyone else's quoted under who sent it (without the sender line `messageFrom` adds),
  * so it never reads as CodeDen's own words.
  */
-function message(input: UserInput, max: number): string {
+export function message(input: UserInput, max: number): string {
   const { from, text } = splitSender(input.text, input.from);
   const body = clip(text.trim(), max) || "(no text)";
   const n = input.attachments.length;

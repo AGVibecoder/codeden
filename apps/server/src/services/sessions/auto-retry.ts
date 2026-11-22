@@ -20,10 +20,6 @@ import type { SessionRepo } from "./repo";
 
 /** Waits before the 1st, 2nd and 3rd automatic retry after a transient failure. */
 export const RETRY_DELAYS_MS: readonly number[] = [20_000, 90_000, 5 * 60_000];
-/** How long after a usage limit resets the session is continued. */
-export const USAGE_LIMIT_MARGIN_MS = 60_000;
-/** Longest single timer (setTimeout's limit); longer waits re-arm. */
-const MAX_TIMER_MS = 2 ** 31 - 1;
 
 /** What to do about a session's failed root turn. */
 export type RetryDecision =
@@ -34,7 +30,6 @@ export type RetryDecision =
 export interface PlanOptions {
   enabled: boolean;
   delaysMs: readonly number[];
-  usageMarginMs: number;
 }
 
 /**
@@ -42,8 +37,8 @@ export interface PlanOptions {
  * and when. Only an idle agent session whose last root turn, a work turn (never a compaction),
  * failed for a passing reason qualifies (`awaitsRetryDecision`); `attempt` counts the
  * consecutive such failures. A transient
- * failure waits `delaysMs[attempt - 1]` after the turn ended, a usage limit until `retryAt`
- * plus the margin. Past the last delay, without a reset time, or switched off: give up. Pure.
+ * failure waits `delaysMs[attempt - 1]` after the turn ended. Past the last delay, or switched
+ * off: give up. Pure.
  */
 export function planRetry(
   session: Session,
@@ -54,7 +49,7 @@ export function planRetry(
   if (!turn?.error || turn.status !== "failed" || session.status !== "idle") {
     return { action: "none" };
   }
-  // "Continue where you left off" after a compaction would re-run the finished task before it.
+  // A retry after a compaction would re-run the finished task before it.
   if (turn.kind === "compact") return { action: "none" };
   const error = turn.error;
   if (!awaitsRetryDecision(session, error)) return { action: "none" };
@@ -74,11 +69,6 @@ export function planRetry(
   if (!opts.enabled) return giveUp(false);
   if (attempt > opts.delaysMs.length) return giveUp(true);
   const endedAt = Date.parse(turn.completedAt ?? turn.startedAt);
-  if (error.kind === "usage_limit") {
-    const resetsAt = error.retryAt ? Date.parse(error.retryAt) : Number.NaN;
-    if (!Number.isFinite(resetsAt)) return giveUp(false);
-    return { action: "retry", turn, error, attempt, at: resetsAt + opts.usageMarginMs };
-  }
   const delay = opts.delaysMs[attempt - 1] ?? 0;
   return { action: "retry", turn, error, attempt, at: endedAt + delay };
 }
@@ -93,37 +83,28 @@ export function inAbout(ms: number): string {
   return `in about ${h} h${m % 60 ? ` ${m % 60} min` : ""}`;
 }
 
-/** The `codeden` message that continues the session. */
-export function continueMessage(error: ErrorInfo): string {
-  const reason =
-    error.kind === "usage_limit"
-      ? "usage limit reached"
-      : error.message.length > 160
-        ? `${error.message.slice(0, 157)}...`
-        : error.message;
-  return `Previous turn stopped (${reason}); continue where you left off.`;
-}
-
 export interface AutoRetryDeps {
   db: Db;
   store: EventStore;
   repo: SessionRepo;
   inbox: Pick<InboxService, "raiseRunFailed">;
   settings: () => Settings;
+  /** The briefing a retry sends: the task, where it was, what it changed (`CutOffSessions`). */
+  briefing: (session: Session, error: ErrorInfo) => Promise<string>;
   /** Send a message from CodeDen to an idle session. */
   send: (sessionId: string, input: UserInput) => Promise<unknown>;
   now?: () => number;
   delaysMs?: readonly number[];
-  usageMarginMs?: number;
   log?: (message: string) => void;
 }
 
 /**
  * Automatic retries for agent sessions (§7.3 `ErrorInfo.kind`). A root turn that failed for a
  * passing reason leaves the session idle with no inbox item (the reducer, `awaitsRetryDecision`);
- * this service then continues it with a `codeden` message after a backoff (transient: 20 s,
- * 90 s, 5 min, at most three in a row) or a minute after a usage limit resets, and says so in
- * the transcript. A user message or Stop cancels a pending retry. When the retries run out, or
+ * this service then retries it with a `codeden` briefing (its task, where it was, what it
+ * changed; never a bare "carry on") after a backoff of 20 s, 90 s and 5 min, at most three in a
+ * row, and says so in the transcript. A usage limit doesn't come here: it cuts the session off
+ * (§4.2). A user message or Stop cancels a pending retry. When the retries run out, or
  * `sessions.autoRetry` is off, the session fails as it always did: `failed` with a `run_failed`
  * inbox item (and the PM notices that come from it). Pending retries are derived from the turns
  * and sessions tables, so a server restart picks them up again. Orchestrator and PM sessions
@@ -203,7 +184,6 @@ export class AutoRetry {
     return planRetry(session, rootTurns, {
       enabled: this.deps.settings().sessions.autoRetry,
       delaysMs: this.deps.delaysMs ?? RETRY_DELAYS_MS,
-      usageMarginMs: this.deps.usageMarginMs ?? USAGE_LIMIT_MARGIN_MS,
     });
   }
 
@@ -213,16 +193,10 @@ export class AutoRetry {
     const wait = Math.max(0, plan.at - this.now());
     const max = (this.deps.delaysMs ?? RETRY_DELAYS_MS).length;
     this.notice(sessionId, plan.turn, {
-      message:
-        plan.error.kind === "usage_limit"
-          ? `Usage limit reached. CodeDen continues the session ${inAbout(wait)}, a minute after it resets.`
-          : `Retrying automatically ${inAbout(wait)} (attempt ${plan.attempt} of ${max}).`,
+      message: `Retrying automatically ${inAbout(wait)} (attempt ${plan.attempt} of ${max}).`,
       data: { attempt: plan.attempt, maxAttempts: max, retryAt: new Date(plan.at).toISOString() },
     });
-    const timer = setTimeout(
-      () => void this.fire(sessionId, plan.turn.id),
-      Math.min(wait, MAX_TIMER_MS),
-    );
+    const timer = setTimeout(() => void this.fire(sessionId, plan.turn.id), wait);
     timer.unref?.();
     this.timers.set(sessionId, { turnId: plan.turn.id, timer });
   }
@@ -239,11 +213,11 @@ export class AutoRetry {
     }
     if (decision.action === "give_up") return this.giveUp(sessionId, decision);
     if (decision.action !== "retry" || decision.turn.id !== turnId) return;
-    // A very long wait (a weekly limit) re-arms until it is due.
     if (decision.at > this.now()) return this.schedule(sessionId, decision);
-    this.deps.log?.(`auto-retry: continuing session ${sessionId} (attempt ${decision.attempt})`);
+    this.deps.log?.(`auto-retry: retrying session ${sessionId} (attempt ${decision.attempt})`);
     try {
-      const text = continueMessage(decision.error);
+      const session = this.deps.repo.get(sessionId);
+      const text = await this.deps.briefing(session, decision.error);
       await this.deps.send(sessionId, { text, attachments: [], from: "codeden" });
     } catch (error) {
       this.deps.log?.(`auto-retry for ${sessionId}: ${errorMessage(error)}`);

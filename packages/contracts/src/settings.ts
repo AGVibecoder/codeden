@@ -332,11 +332,17 @@ export const Settings = z.object({
        */
       prFeedback: z.boolean().default(true),
       /**
-       * Continue an agent session by itself after a turn fails for a passing reason: an
-       * overloaded API or dropped connection (after 20 s, 90 s and 5 min, then it gives up) or
-       * a usage limit (a minute after it resets). Off: such a turn fails the session as before.
+       * Retry an agent session by itself after a turn fails for a passing reason, an overloaded
+       * API or a dropped connection (after 20 s, 90 s and 5 min, then it gives up), with a
+       * briefing of where it was. Off: such a turn fails the session as before.
        */
       autoRetry: z.boolean().default(true),
+      /**
+       * Continue a session cut off by a usage limit by itself, with its briefing, a minute after
+       * the limit resets (§4.2). Off: it waits, red, until someone presses Continue (each
+       * session can still opt in on its own).
+       */
+      continueWhenUsageResets: z.boolean().default(false),
     })
     .prefault({}),
   /** Master switch; individual automations are still off by default (§10). */

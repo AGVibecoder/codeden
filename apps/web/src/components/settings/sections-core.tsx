@@ -74,11 +74,20 @@ export function GeneralSettings() {
         </SettingRow>
         <SettingRow
           label="Retry after passing failures"
-          help="When a turn fails because the API was overloaded or the connection dropped, continue after 20 s, 90 s and 5 min; after a usage limit, continue once it resets. Applies to every agent session."
+          help="When a turn fails because the API was overloaded or the connection dropped, retry after 20 s, 90 s and 5 min with a briefing of where it was. Applies to every agent session."
         >
           <Switch
             checked={settings.sessions.autoRetry}
             onCheckedChange={(v) => update({ sessions: { autoRetry: v } })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Continue when usage resets"
+          help="A session stopped by a usage limit shows as cut off and waits for Continue. On: every such session continues by itself, with its briefing, a minute after the limit resets. Each session can also opt in on its own."
+        >
+          <Switch
+            checked={settings.sessions.continueWhenUsageResets}
+            onCheckedChange={(v) => update({ sessions: { continueWhenUsageResets: v } })}
           />
         </SettingRow>
       </SettingsSection>

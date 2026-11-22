@@ -12,6 +12,7 @@ import { activeTurn } from "@/lib/transcript/reducer";
 import { latestFollowups } from "@/lib/transcript/timeline";
 import { useComposerStore } from "@/stores/composer";
 import { useNewSessionStore } from "@/stores/new-session";
+import { CutOffNotice } from "./cut-off-notice";
 import { FirstMessage } from "./first-message";
 import { McpNotice } from "./mcp-notice";
 import { QueuedMessages } from "./queued-messages";
@@ -127,6 +128,7 @@ export function ThreadView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ThreadHeader session={session} running={running} />
+      <CutOffNotice session={session} />
       <McpNotice session={session} />
       {error ? (
         <EmptyState icon={<Sparkles />} title="Couldn't load this session" className="flex-1">

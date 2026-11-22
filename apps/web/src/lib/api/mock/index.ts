@@ -167,6 +167,19 @@ export function createMockClient(opts: MockClientOptions = {}): CodeDenClient {
       }
       world.updateSession(sessionId, { status: "idle" });
     },
+    async continueSession(sessionId, req) {
+      const session = world.snapshot.sessions.find((s) => s.id === sessionId);
+      const cutOff = session?.cutOff;
+      if (!session || !cutOff) throw new ApiRequestError(409, "not_cut_off", "Not cut off");
+      if (req.mode === "when_usage_resets" || req.mode === "cancel") {
+        const on = req.mode === "when_usage_resets";
+        world.updateSession(sessionId, { cutOff: { ...cutOff, continueWhenReset: on } });
+        return { status: on ? "scheduled" : "cancelled" };
+      }
+      world.updateSession(sessionId, { cutOff: null });
+      runTurn(sessionId, "Your work in this session was cut off. (Mock briefing.)", "codeden");
+      return { status: "continued" };
+    },
     async compactSession(sessionId) {
       const session = world.snapshot.sessions.find((s) => s.id === sessionId);
       if (running.has(sessionId) || session?.status === "running") {

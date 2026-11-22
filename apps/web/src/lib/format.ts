@@ -1,4 +1,4 @@
-import type { SessionStatus, SubagentStats } from "@codeden/contracts";
+import { isCutOff, type Session, type SessionStatus, type SubagentStats } from "@codeden/contracts";
 
 /** "now", "3m", "2h", "4d" — compact age for dense lists. */
 export function ageShort(iso: string, now = Date.now()): string {
@@ -100,7 +100,8 @@ export function subagentStatsTitle(stats: SubagentStats | undefined): string {
   return parts.join(" · ");
 }
 
-export type Tone = "running" | "waiting" | "done" | "failed" | "idle";
+/** `cut_off`: a session cut off mid-turn, waiting for Continue (§4.2). */
+export type Tone = "running" | "waiting" | "done" | "failed" | "idle" | "cut_off";
 
 export const statusTone: Record<SessionStatus, Tone> = {
   created: "idle",
@@ -127,6 +128,16 @@ export const statusLabel: Record<SessionStatus, string> = {
   failed: "Failed",
   stopped: "Stopped",
 };
+
+/** A session's tone: a cut-off one (§4.2) has its own, whatever its status says. */
+export function sessionTone(s: Pick<Session, "status" | "cutOff">): Tone {
+  return isCutOff(s) ? "cut_off" : statusTone[s.status];
+}
+
+/** A session's status as words: "Cut off" for a cut-off one (§4.2). */
+export function sessionLabel(s: Pick<Session, "status" | "cutOff">): string {
+  return isCutOff(s) ? "Cut off" : statusLabel[s.status];
+}
 
 /** Sessions that count as live work for Now / Next. */
 export function isActive(status: SessionStatus): boolean {

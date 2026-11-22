@@ -1,4 +1,5 @@
 import type { AnyServerTool } from "../../define";
+import { continueSession, listCutOffSessions } from "./cut-off";
 import { askPm, getOverview, listInbox, messagePm } from "./messaging";
 import { createProject, listProjects, updateProject } from "./projects";
 
@@ -11,4 +12,6 @@ export const orchestratorTools: AnyServerTool[] = [
   messagePm,
   askPm,
   listInbox,
+  listCutOffSessions,
+  continueSession,
 ];
