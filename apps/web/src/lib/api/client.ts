@@ -5,6 +5,8 @@ import type {
   ClaudeSdkStatus,
   CompactSessionResponse,
   ConflictRecord,
+  ContinueSessionRequestInit,
+  ContinueSessionResponse,
   CreateProjectRequest,
   CreateProjectResponse,
   DiffResult,
@@ -171,6 +173,14 @@ export interface CodeDenClient {
    * (`ProviderCapabilities.compact`). Rejects with 409 while a turn runs or messages wait.
    */
   compactSession(sessionId: string): Promise<CompactSessionResponse>;
+  /**
+   * A cut-off session (§4.2): continue it now with its briefing, or opt in to (or out of)
+   * continuing by itself once its usage limit resets.
+   */
+  continueSession(
+    sessionId: string,
+    req: ContinueSessionRequestInit,
+  ): Promise<ContinueSessionResponse>;
   respond(sessionId: string, requestId: string, response: RuntimeResponse): Promise<void>;
   startSession(input: StartSessionRequestInit): Promise<StartSessionResponse>;
   stopSession(sessionId: string): Promise<void>;

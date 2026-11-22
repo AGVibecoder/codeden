@@ -110,11 +110,11 @@ describe("a compaction that fails", () => {
       repo: env.repo,
       inbox: env.inbox,
       settings: () => defaultSettings(),
+      briefing: async () => "briefing",
       send: async (sessionId, input) => {
         sent.push({ sessionId, input });
       },
       delaysMs: [20, 20, 20],
-      usageMarginMs: 10,
     });
     retry.start();
   });

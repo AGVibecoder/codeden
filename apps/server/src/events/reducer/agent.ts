@@ -69,7 +69,11 @@ export function reduceAgentEvent(
         forkPoint: null,
         kind: event.kind ?? existing?.kind ?? null,
       });
-      if (isRootThread(d, sessionId, event.threadId)) setStatus(d, sessionId, "running", ts);
+      if (isRootThread(d, sessionId, event.threadId)) {
+        setStatus(d, sessionId, "running", ts);
+        // Continued (by Continue or any message): no longer cut off (§4.2).
+        updateSession(d, sessionId, ts, (s) => (s.cutOff ? { ...s, cutOff: null } : s));
+      }
       break;
     }
     case "turn.completed":
@@ -171,6 +175,11 @@ function onTurnEnded(
       setStatus(d, sessionId, "idle", ts);
       return;
     }
+    // A usage limit cuts an agent's work off: it waits, red, for the reset and a Continue.
+    if (current?.role === "agent" && event.error.kind === "usage_limit") {
+      cutOffByUsageLimit(d, sessionId, event.turnId, event.error, ts);
+      return;
+    }
     setStatus(d, sessionId, "failed", ts);
     const session = d.getSession(sessionId)?.session;
     if (session && isFactorySigninFailure(session, event.error)) {
@@ -189,6 +198,31 @@ function onTurnEnded(
       }
     }
   }
+}
+
+/** The session waits for the usage reset with a cut-off (§4.2); no inbox item, it shows red. */
+function cutOffByUsageLimit(
+  d: Draft,
+  sessionId: string,
+  turnId: string,
+  error: ErrorInfo,
+  ts: string,
+): void {
+  updateSession(d, sessionId, ts, (s) =>
+    TERMINAL.has(s.status)
+      ? s
+      : {
+          ...s,
+          status: "interrupted",
+          cutOff: {
+            reason: "usage_limit",
+            at: ts,
+            turnId,
+            resetsAt: error.retryAt ?? null,
+            continueWhenReset: false,
+          },
+        },
+  );
 }
 
 function cancelRequest(item: RequestItem): Item {

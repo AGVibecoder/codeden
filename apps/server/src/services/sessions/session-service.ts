@@ -516,12 +516,12 @@ export class SessionService {
   }
 
   /**
-   * Re-open a session whose turn was cut off by a runner restart and tell the agent to carry
-   * on (§4.2). Resumes through the provider's resume token. A message already on its way
-   * re-opens it (a PM or the factory wrote to it first), so nothing is sent: a second resume
-   * would open the conversation twice.
+   * Continue a cut-off session (§4.2) with CodeDen's `text`, its briefing. Resumes through the
+   * provider's resume token when the runner no longer hosts it.
+   * A message already on its way re-opens it (a PM or the factory wrote to it first), so nothing
+   * is sent: a second resume would open the conversation twice.
    */
-  async continueAfterRestart(id: string, text: string): Promise<void> {
+  async continueWith(id: string, text: string): Promise<void> {
     if (this.delivering.has(id)) return;
     const session = this.deps.repo.get(id);
     await this.sendNow(session, { text, attachments: [], from: "codeden" }, "codeden");

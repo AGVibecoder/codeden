@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GitHubIssueRef, GitHubPrRef, Id, JsonValue, Timestamp } from "./common";
+import { CutOffReason } from "./cut-off";
 import { InboxItemKind, InboxItemStatus } from "./entities/inbox";
 import { AutonomyMode, FactoryLoopState } from "./factory";
 import { ConflictDecision, ScheduledRun, StartedBy, WorkKey, WorkSummary } from "./work";
@@ -31,6 +32,7 @@ export const NoticeType = z.enum([
   "orchestrator.message",
   "factory.update",
   "reminder",
+  "sessions.cut_off",
 ]);
 export type NoticeType = z.infer<typeof NoticeType>;
 
@@ -236,6 +238,24 @@ export const Notice = z.discriminatedUnion("type", [
       note: z.string(),
       /** The role session that scheduled it. */
       requestedBy: Id.nullable(),
+    }),
+  }),
+  z.object({
+    ...noticeBase,
+    type: z.literal("sessions.cut_off"),
+    /**
+     * Sessions whose turns a runner restart or crash cut off (§4.2), found when the runner came
+     * back. For the orchestrator, which tells the user; nothing continues them by itself.
+     */
+    data: z.object({
+      sessions: z.array(
+        z.object({
+          sessionId: Id,
+          projectId: Id.nullable(),
+          title: z.string(),
+          reason: CutOffReason,
+        }),
+      ),
     }),
   }),
 ]);

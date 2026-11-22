@@ -1,4 +1,4 @@
-import type { ForkOrigin, Session } from "@codeden/contracts";
+import { type ForkOrigin, isCutOff, type Session } from "@codeden/contracts";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -37,7 +37,7 @@ import { SessionCostChip } from "@/components/usage/session-cost";
 import { useClient } from "@/lib/api";
 import { copyWithFeedback } from "@/lib/copy";
 import { forkOriginLabel, isHandoff, isReview } from "@/lib/fork-origin";
-import { statusLabel } from "@/lib/format";
+import { sessionLabel, sessionTone } from "@/lib/format";
 import { useProject, useSession } from "@/lib/queries";
 import { MARKDOWN_HINT, useSessionActions } from "@/lib/session-actions";
 import { hasRightPanel } from "@/lib/session-workspace";
@@ -123,7 +123,7 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
     <header className="@container flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-4">
       <MobileNavButton />
       {session.role === "agent" ? (
-        <StatusDot status={session.status} />
+        <StatusDot tone={sessionTone(session)} />
       ) : (
         <RoleBadge role={session.role} short />
       )}
@@ -141,10 +141,14 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
         <span
           className={cn(
             "shrink-0 text-2xs",
-            session.status === "waiting" ? "text-status-waiting" : "text-muted-foreground",
+            isCutOff(session)
+              ? "text-status-failed"
+              : session.status === "waiting"
+                ? "text-status-waiting"
+                : "text-muted-foreground",
           )}
         >
-          {statusLabel[session.status]}
+          {sessionLabel(session)}
           {session.archivedAt && " · Archived"}
         </span>
       </div>

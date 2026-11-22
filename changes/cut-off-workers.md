@@ -1,0 +1,6 @@
+---
+section: changed
+---
+
+- **Cut-off sessions wait for you instead of resuming blindly.** A session whose turn was stopped by a crash, by closing CodeDen or by a usage limit now shows red as *Cut off* (its dot turns green with a yellow drop) and waits, instead of being resumed with a generic "continue where you left off" that could re-run finished work or lose its instructions. CodeDen only calls a session cut off once its runner confirms it no longer runs that turn, so no second agent starts next to one that is still going. **Continue** sends the agent a briefing read from the session's log: its original task, where it was (its last command and output), why it stopped, and what it already changed, and asks it to check where things stand before picking up. After a restart the orchestrator tells you how many workers were cut off, and can continue them when you ask (`continue_session`).
+- **Usage limits wait for the reset.** A session stopped by a usage limit shows when usage resets, and Continue turns on once it has. To continue by itself at the reset, switch on "Continue when usage resets" on the session, or for every session in Settings. Automatic retries after an overloaded API or dropped connection now send the same briefing.

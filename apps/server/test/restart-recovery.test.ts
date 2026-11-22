@@ -12,7 +12,6 @@ import {
   startServer,
 } from "../src";
 import { currentTurn } from "../src/mcp/transcript";
-import { RESTART_CONTINUE_MESSAGE } from "../src/services/sessions/recovery";
 import { FakeFactoryGithub } from "./support/fake-factory-github";
 import { removeTree } from "./support/remove-tree";
 
@@ -59,7 +58,7 @@ async function until<T>(check: () => T | undefined | false, timeoutMs = 30_000):
   }
 }
 
-it("resumes a turn cut off by a runner drain and tells the agent to continue", async () => {
+it("marks a turn cut off by a runner drain, and continues it only on Continue", async () => {
   const s = server.services;
   // A long prompt keeps the Fake turn streaming for a few seconds (one delta per word).
   const prompt = Array.from({ length: 300 }, (_, i) => `w${i}`).join(" ");
@@ -83,21 +82,32 @@ it("resumes a turn cut off by a runner drain and tells the agent to continue", a
     timeoutMs: 100,
   });
 
-  // A fresh runner takes over and the session is resumed with the continue message.
+  // A fresh runner takes over; the session waits, cut off, instead of being resumed.
   await until(() => {
     const pid = readLiveRunnerLock(server.paths.runnerLock)?.pid;
     return pid !== undefined && pid !== oldPid && server.runner?.status.state === "connected";
   });
-  const reply = await until(() => {
-    const thread = s.sessionRepo.get(id).rootThreadId;
-    if (!thread) return undefined;
-    const page = s.sessionRepo.threadPage(id, thread, { limit: 200 });
-    return page.items.find(
-      (r) => r.item.kind === "assistant_message" && r.item.text.includes(RESTART_CONTINUE_MESSAGE),
-    );
+  const cut = await until(() => {
+    const session = s.sessionRepo.get(id);
+    return session.cutOff ? session : undefined;
   }, 45_000);
-  expect(reply).toBeTruthy();
-  await until(() => s.sessionRepo.get(id).status === "idle");
+  expect(cut).toMatchObject({ status: "interrupted", cutOff: { reason: "app_closed" } });
+  const messages = () => {
+    const thread = s.sessionRepo.get(id).rootThreadId;
+    if (!thread) return [];
+    return s.sessionRepo
+      .threadPage(id, thread, { limit: 200 })
+      .items.flatMap((r) => (r.item.kind === "user_message" ? [r.item.input] : []));
+  };
+  expect(messages()).toHaveLength(1);
+
+  await expect(s.cutOffs.continue(id, { mode: "now" })).resolves.toEqual({ status: "continued" });
+  await until(() => s.sessionRepo.get(id).status === "idle", 45_000);
+  const briefing = messages()[1];
+  expect(briefing).toMatchObject({ from: "codeden" });
+  expect(briefing?.text).toContain("CodeDen was closed or restarted while you were working.");
+  expect(briefing?.text).toContain("w0 w1 w2");
+  expect(s.sessionRepo.get(id).cutOff).toBeNull();
   const types = s.store.listAfter(0, 100_000).map((e) => e.type);
   expect(types).toContain("runner.draining");
   expect(types).toContain("agent.turn.interrupted");

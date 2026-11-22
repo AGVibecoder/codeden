@@ -44,7 +44,8 @@ export function providerFailure(
   inbox: Pick<InboxService, "find">,
   s: Session,
 ): ProviderCause | null {
-  if (s.status !== "failed" && s.status !== "idle") return null;
+  // Idle after a passing failure, cut off by a usage limit (§4.2), or failed.
+  if (s.status !== "failed" && s.status !== "idle" && s.status !== "interrupted") return null;
   const last = repo.rootTurnIds(s).at(-1);
   if (!last) {
     if (s.status !== "failed") return null;

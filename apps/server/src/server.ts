@@ -282,6 +282,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   void services.generatedImages.start();
   services.prFeedback.start();
   services.autoRetry.start();
+  services.cutOffs.start();
   services.checksLoop.start();
   // Settles failed runs whose work moved on, including those left from before a restart.
   services.inboxSettler.start();
@@ -441,6 +442,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
       services.generatedImages.stop();
       services.prFeedback.stop();
       services.autoRetry.stop();
+      services.cutOffs.stop();
       services.checksLoop.stop();
       services.inboxSettler.stop();
       services.updates.stop();

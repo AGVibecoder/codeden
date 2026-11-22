@@ -48,6 +48,7 @@ import {
 import type { SecretStore } from "./secrets";
 import { AutoRetry, type AutoRetryDeps } from "./sessions/auto-retry";
 import { ChecksLoop } from "./sessions/checks-loop";
+import { CutOffSessions } from "./sessions/cut-off";
 import { GeneratedImages } from "./sessions/generated-images";
 import { SessionLauncher } from "./sessions/launcher";
 import { SessionLifecycle } from "./sessions/lifecycle";
@@ -138,7 +139,9 @@ export interface ServicesOptions {
   /** Unwatched approvals: how long they wait for the user (tests shorten it). */
   unwatchedApprovals?: Pick<UnwatchedApprovalsDeps, "waitMs" | "now">;
   /** Shorter retry waits (tests). */
-  autoRetry?: Pick<AutoRetryDeps, "delaysMs" | "usageMarginMs">;
+  autoRetry?: Pick<AutoRetryDeps, "delaysMs">;
+  /** How long after a usage reset an opted-in cut-off session continues (tests). */
+  usageResetMarginMs?: number;
   log?: (message: string) => void;
 }
 
@@ -165,6 +168,8 @@ export interface AppServices {
   queue: QueueService;
   lifecycle: SessionLifecycle;
   recovery: SessionRecovery;
+  /** Cut-off sessions waiting for a Continue, and their briefings (§4.2). */
+  cutOffs: CutOffSessions;
   questions: QuestionBroker;
   mcpTokens: McpTokenStore;
   /** CodeDen's tool registry (§8.3), exposed over MCP and to API handlers. */
@@ -484,6 +489,26 @@ export function createServices(opts: ServicesOptions): AppServices {
     ...opts.unwatchedApprovals,
     log: opts.log,
   });
+  const workbench = new WorkbenchService({
+    db: opts.db,
+    repo: sessionRepo,
+    runner: opts.runner,
+    runners,
+    projects,
+    git: gitBroker,
+  });
+  const cutOffs = new CutOffSessions({
+    repo: sessionRepo,
+    store: opts.store,
+    sessions,
+    notify: (draft) => orchestration.notify(draft),
+    settings: () => opts.settings.get(),
+    checkpoints: (id) => workbench.checkpoints(id),
+    runner: opts.runner,
+    runners,
+    usageMarginMs: opts.usageResetMarginMs,
+    log: opts.log,
+  });
   const services: AppServices = {
     db: opts.db,
     store: opts.store,
@@ -500,10 +525,12 @@ export function createServices(opts: ServicesOptions): AppServices {
     sessions,
     queue,
     lifecycle,
+    cutOffs,
     recovery: new SessionRecovery({
       repo: sessionRepo,
       sessions,
       launcher,
+      cutOffs,
       runner: opts.runner,
       runners,
       sweepVendorHistory: (runner, skip) => providerHistory.sweep(runner, skip),
@@ -577,6 +604,7 @@ export function createServices(opts: ServicesOptions): AppServices {
       repo: sessionRepo,
       inbox,
       settings: () => opts.settings.get(),
+      briefing: (session, error) => cutOffs.briefing(session, "error", error.message),
       send: (id, input) => sessions.send(id, { input, whenBusy: "queue" }, "codeden"),
       ...opts.autoRetry,
       log: opts.log,
@@ -615,14 +643,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     userHome,
     questions,
     mcpTokens,
-    workbench: new WorkbenchService({
-      db: opts.db,
-      repo: sessionRepo,
-      runner: opts.runner,
-      runners,
-      projects,
-      git: gitBroker,
-    }),
+    workbench,
     tools: undefined as unknown as ToolRegistry,
     workspaceFs: (session) =>
       workspaceFsFor({ runner: opts.runner, runners, home: opts.paths.home }, session),

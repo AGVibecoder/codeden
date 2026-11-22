@@ -226,8 +226,8 @@ export function createChecksEnv(): ChecksEnv {
     repo: env.repo,
     inbox: env.inbox,
     settings: () => defaultSettings(),
+    briefing: async () => "briefing",
     send,
-    usageMarginMs: 0,
   });
   loop.start();
   autoRetry.start();

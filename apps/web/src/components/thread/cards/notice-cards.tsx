@@ -21,6 +21,7 @@ import {
   OctagonX,
   SkipForward,
   Swords,
+  Unplug,
   XCircle,
 } from "lucide-react";
 import { ProjectTile } from "@/components/shell/sidebar/project-group";
@@ -60,6 +61,7 @@ const look: Record<NoticeType, { icon: LucideIcon; tone: string; label: string }
     label: "From the orchestrator",
   },
   reminder: { icon: AlarmClock, tone: "text-primary", label: "Wake-up" },
+  "sessions.cut_off": { icon: Unplug, tone: "text-status-failed", label: "Cut off" },
 };
 
 /** One line of detail under the title, specific to the notice type. */
@@ -90,6 +92,8 @@ function detail(n: Notice): string | null {
       return n.data.text;
     case "reminder":
       return n.data.note;
+    case "sessions.cut_off":
+      return n.data.sessions.map((c) => c.title).join(" · ");
     default:
       return null;
   }

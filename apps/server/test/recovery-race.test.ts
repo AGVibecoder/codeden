@@ -1,4 +1,4 @@
-import type { Session } from "@codeden/contracts";
+import type { CutOffReason, Session } from "@codeden/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type { RunnerPort, RunnerRouter } from "../src/services/runner-port";
 import type { SessionLauncher } from "../src/services/sessions/launcher";
@@ -8,13 +8,14 @@ import type { SessionService } from "../src/services/sessions/session-service";
 import { sampleSession } from "./helpers";
 
 /**
- * Recovery after a runner connects, with a session started on that runner while its
- * `runner.status` request is in flight (the CI flake in restart-recovery.test.ts): the new
- * session turns `running` before the reply is handled, and the reply does not list it. And
- * with a cut-off session that comes back by another path (a message, Retry or queued
- * delivery) while recovery is still resuming the ones before it.
+ * Cut-off detection after a runner connects (§4.2): a session counts as cut off only when its
+ * log shows a turn that never ended and the runner, asked now, no longer hosts it. Nothing is
+ * resumed: cut-off sessions are marked and announced, and wait for a Continue. Includes a
+ * session started on that runner while its `runner.status` request is in flight (the CI flake
+ * in restart-recovery.test.ts): it turns `running` before the reply is handled, and the reply
+ * does not list it.
  */
-describe("session recovery", () => {
+describe("cut-off detection", () => {
   function setup(
     initial: Session[],
     runners?: (home: RunnerPort) => RunnerRouter,
@@ -30,16 +31,26 @@ describe("session recovery", () => {
       },
       closeOrphanedTurns: vi.fn(() => 0),
       // Their cut-off turns are work turns (a cut-off compaction: compaction-restart.test.ts).
-      rootTurnIds: () => [],
+      rootTurnIds: (s: Session) => [`${s.id}-turn`],
       turn: () => null,
     } as unknown as SessionRepo;
-    const continueAfterRestart = vi.fn(async (_id: string, _text: string): Promise<void> => {});
+    // Marking a session cut off, as `CutOffSessions.mark` does, and the orchestrator's notice.
+    const mark = vi.fn((id: string, reason: CutOffReason, turnId: string | null): Session => {
+      const s = sessions.get(id) as Session;
+      const next: Session = {
+        ...s,
+        status: "interrupted",
+        cutOff: { reason, at: s.updatedAt, turnId, resetsAt: null, continueWhenReset: false },
+      };
+      sessions.set(id, next);
+      return next;
+    });
+    const announce = vi.fn((_cut: Session[], _key: string) => undefined);
     // Sessions with a message, Retry or queued delivery on its way to the runner.
     const delivering = new Set<string>();
     const service = {
       launching: new Map<string, Promise<void>>(),
       isDelivering: (id: string) => delivering.has(id),
-      continueAfterRestart,
       sessionsWithQueuedMessages: () => [],
       releaseOutboxes: () => undefined,
     } as unknown as SessionService;
@@ -64,6 +75,7 @@ describe("session recovery", () => {
       repo,
       sessions: service,
       launcher,
+      cutOffs: { mark, announce },
       runner,
       runners: runners?.(runner),
       ...(sweepVendorHistory ? { sweepVendorHistory } : {}),
@@ -72,7 +84,8 @@ describe("session recovery", () => {
       recovery,
       repo,
       sessions,
-      continueAfterRestart,
+      mark,
+      announce,
       fail,
       hosted,
       delivering,
@@ -82,6 +95,9 @@ describe("session recovery", () => {
     };
   }
 
+  const cut = { ...sampleSession, provider: "fake", resumeToken: "r" } as const;
+  const marked = (t: ReturnType<typeof setup>) => t.mark.mock.calls.map((c) => c[0]);
+
   it("leaves alone a session that started while runner.status was in flight", async () => {
     const t = setup([{ ...sampleSession, id: "new", status: "starting", provider: "fake" }]);
     t.whileStatusInFlight(() => {
@@ -90,11 +106,63 @@ describe("session recovery", () => {
     });
     await t.recovery.onRunnerReady();
     expect(t.fail).not.toHaveBeenCalled();
-    expect(t.continueAfterRestart).not.toHaveBeenCalled();
+    expect(t.mark).not.toHaveBeenCalled();
     expect(t.sessions.get("new")?.status).toBe("running");
   });
 
-  it("only resumes the cut-off sessions of the runner that became ready", async () => {
+  it("marks a turn the runner vanished in as a crash, and a drained one as app closed", async () => {
+    const t = setup([
+      { ...cut, id: "crashed", status: "running" },
+      { ...cut, id: "drained", status: "interrupted" },
+    ]);
+    await t.recovery.onRunnerReady();
+    expect(t.mark.mock.calls).toEqual([
+      ["crashed", "crash", "crashed-turn"],
+      ["drained", "app_closed", "drained-turn"],
+    ]);
+    // Turns and approvals the dead runner left open are closed before it waits.
+    expect(t.repo.closeOrphanedTurns).toHaveBeenCalledWith("crashed");
+    expect(t.sessions.get("crashed")).toMatchObject({
+      status: "interrupted",
+      cutOff: { reason: "crash" },
+    });
+    expect(t.announce).toHaveBeenCalledTimes(1);
+    expect(t.announce.mock.calls[0]?.[0].map((s) => s.id)).toEqual(["crashed", "drained"]);
+    expect(t.fail).not.toHaveBeenCalled();
+  });
+
+  it("never calls a session cut off while the runner still hosts it", async () => {
+    // The server restarted alone: the runner kept running the turn. Starting the session again
+    // would run a second agent in the same worktree.
+    const t = setup([{ ...cut, id: "alive", status: "running" }]);
+    t.hosted.add("alive");
+    await t.recovery.onRunnerReady();
+    expect(t.mark).not.toHaveBeenCalled();
+    expect(t.repo.closeOrphanedTurns).not.toHaveBeenCalled();
+    expect(t.announce.mock.calls[0]?.[0]).toEqual([]);
+    expect(t.sessions.get("alive")?.status).toBe("running");
+  });
+
+  it("leaves a session that is already cut off as it is", async () => {
+    const waiting: Session = {
+      ...cut,
+      id: "waiting",
+      status: "interrupted",
+      cutOff: {
+        reason: "usage_limit",
+        at: cut.updatedAt,
+        turnId: "t",
+        resetsAt: null,
+        continueWhenReset: false,
+      },
+    };
+    const t = setup([waiting]);
+    await t.recovery.onRunnerReady();
+    expect(t.mark).not.toHaveBeenCalled();
+    expect(t.sessions.get("waiting")?.cutOff?.reason).toBe("usage_limit");
+  });
+
+  it("only marks the sessions of the runner that became ready", async () => {
     const other = {
       request: vi.fn(async () => ({
         sessions: [],
@@ -104,16 +172,10 @@ describe("session recovery", () => {
       })),
       providers: () => [{ id: "fake", capabilities: { resume: true } }],
     } as unknown as RunnerPort;
-    const cut = {
-      ...sampleSession,
-      status: "running",
-      provider: "fake",
-      resumeToken: "r",
-    } as const;
     const t = setup(
       [
-        { ...cut, id: "at-home" },
-        { ...cut, id: "on-b", runnerId: "r-b" },
+        { ...cut, id: "at-home", status: "running" },
+        { ...cut, id: "on-b", status: "running", runnerId: "r-b" },
       ],
       (home) => ({
         home: () => home,
@@ -123,102 +185,31 @@ describe("session recovery", () => {
     );
     await t.recovery.onRunnerReady("r-b");
     expect(other.request).toHaveBeenCalledWith({ name: "runner.status" }, 10_000);
-    expect(t.continueAfterRestart.mock.calls.map((c) => (c as unknown[])[0])).toEqual(["on-b"]);
+    expect(marked(t)).toEqual(["on-b"]);
     await t.recovery.onRunnerReady("r-home");
-    expect(t.continueAfterRestart.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
-      "on-b",
-      "at-home",
-    ]);
+    expect(marked(t)).toEqual(["on-b", "at-home"]);
   });
 
-  it("still resumes a session whose turn was cut off before the runner was ready", async () => {
-    const t = setup([
-      { ...sampleSession, id: "cut", status: "running", provider: "fake", resumeToken: "r1" },
-    ]);
-    await t.recovery.onRunnerReady();
-    expect(t.continueAfterRestart).toHaveBeenCalledWith("cut", expect.any(String));
-    // Turns and approvals the dead runner left open are closed before resuming.
-    expect(t.repo.closeOrphanedTurns).toHaveBeenCalledWith("cut");
-    expect(t.fail).not.toHaveBeenCalled();
-  });
-
-  it("leaves alone a cut-off session resumed by another path while an earlier one resumes", async () => {
-    const cut = { ...sampleSession, provider: "fake", resumeToken: "r" } as const;
+  it("leaves alone a session with a message on its way to the runner", async () => {
     const t = setup([
       { ...cut, id: "first", status: "running" },
       { ...cut, id: "second", status: "interrupted" },
     ]);
-    t.continueAfterRestart.mockImplementation(async (id) => {
-      if (id === "first") {
-        // Resuming the first takes a while. Meanwhile the user sends "second" a message:
-        // the runner opens it and its new turn starts.
-        t.hosted.add("second");
-        const s = t.sessions.get("second");
-        if (s) t.sessions.set("second", { ...s, status: "running" });
-        await Promise.resolve();
-        return;
-      }
-      // The runner refuses a second turn while one is running.
-      if (t.hosted.has(id)) {
-        throw Object.assign(new Error("A turn is already running"), { code: "turn_running" });
-      }
-    });
-
+    // The user's message to "second" is being sent; the runner hasn't answered yet.
+    t.delivering.add("second");
     await t.recovery.onRunnerReady();
-
-    expect(t.continueAfterRestart.mock.calls.map((c) => c[0])).toEqual(["first"]);
-    // The live turn of "second" and its approvals stay open, and it is not marked failed.
+    expect(marked(t)).toEqual(["first"]);
     expect(t.repo.closeOrphanedTurns).not.toHaveBeenCalledWith("second");
-    expect(t.fail).not.toHaveBeenCalled();
-    expect(t.sessions.get("second")?.status).toBe("running");
   });
 
-  it("resumes every cut-off session once", async () => {
-    const cut = { ...sampleSession, provider: "fake", resumeToken: "r" } as const;
-    const t = setup([
-      { ...cut, id: "first", status: "running" },
-      { ...cut, id: "second", status: "interrupted" },
-    ]);
+  it("fails a session its provider can't resume: there is nothing to wait for", async () => {
+    const t = setup([{ ...cut, id: "lost", status: "running", resumeToken: null }]);
     await t.recovery.onRunnerReady();
-    expect(t.continueAfterRestart.mock.calls.map((c) => c[0])).toEqual(["first", "second"]);
-    expect(t.repo.closeOrphanedTurns).toHaveBeenCalledTimes(2);
-    expect(t.fail).not.toHaveBeenCalled();
+    expect(t.mark).not.toHaveBeenCalled();
+    expect(t.fail).toHaveBeenCalledWith("lost", "restart", expect.any(Error));
   });
 
-  it("leaves alone a cut-off session with a message on its way to the runner", async () => {
-    const cut = { ...sampleSession, provider: "fake", resumeToken: "r" } as const;
-    const t = setup([
-      { ...cut, id: "first", status: "running" },
-      { ...cut, id: "second", status: "interrupted" },
-    ]);
-    t.continueAfterRestart.mockImplementation(async (id) => {
-      // While the first resumes, the user's message to "second" is sent; the runner hasn't
-      // answered yet, but the turn's first events already turned it `running`.
-      if (id === "first") {
-        t.delivering.add("second");
-        const s = t.sessions.get("second");
-        if (s) t.sessions.set("second", { ...s, status: "running" });
-      }
-    });
-    await t.recovery.onRunnerReady();
-    expect(t.continueAfterRestart.mock.calls.map((c) => c[0])).toEqual(["first"]);
-    expect(t.repo.closeOrphanedTurns).not.toHaveBeenCalledWith("second");
-    expect(t.fail).not.toHaveBeenCalled();
-  });
-
-  it("does not fail a session whose turn the runner says is already running", async () => {
-    const t = setup([
-      { ...sampleSession, id: "cut", status: "running", provider: "fake", resumeToken: "r" },
-    ]);
-    t.continueAfterRestart.mockRejectedValue(
-      Object.assign(new Error("A turn is already running"), { code: "turn_running" }),
-    );
-    await t.recovery.onRunnerReady();
-    expect(t.continueAfterRestart).toHaveBeenCalledWith("cut", expect.any(String));
-    expect(t.fail).not.toHaveBeenCalled();
-  });
-
-  it("then sweeps what a crash left in providers' own apps, after resuming", async () => {
+  it("then sweeps what a crash left in providers' own apps, after marking", async () => {
     const order: string[] = [];
     const sweep = vi.fn(async (_runner: RunnerPort, skip: (id: string) => boolean) => {
       order.push("sweep");
@@ -226,17 +217,13 @@ describe("session recovery", () => {
       expect(skip("idle")).toBe(false);
       return { hidden: [], failed: 0 };
     });
-    const t = setup(
-      [{ ...sampleSession, id: "cut", status: "running", provider: "fake", resumeToken: "r" }],
-      undefined,
-      sweep,
-    );
-    t.continueAfterRestart.mockImplementation(async () => {
-      order.push("resume");
+    const t = setup([{ ...cut, id: "cut", status: "running" }], undefined, sweep);
+    t.announce.mockImplementationOnce(() => {
+      order.push("announce");
     });
     t.delivering.add("on-its-way");
     await t.recovery.onRunnerReady();
-    await vi.waitFor(() => expect(order).toEqual(["resume", "sweep"]));
+    await vi.waitFor(() => expect(order).toEqual(["announce", "sweep"]));
   });
 
   it("finishes recovery without waiting for the sweep, and recovers a reconnect during one", async () => {
@@ -248,12 +235,7 @@ describe("session recovery", () => {
           finishSweep = () => resolve({ hidden: [], failed: 0 });
         }),
     );
-    const cut = { ...sampleSession, provider: "fake", resumeToken: "r" } as const;
     const t = setup([{ ...cut, id: "first", status: "running" }], undefined, sweep);
-    // A resumed session is hosted by the runner again.
-    t.continueAfterRestart.mockImplementation(async (id) => {
-      t.hosted.add(id);
-    });
 
     let recovered = false;
     void t.recovery.onRunnerReady().then(() => {
@@ -261,12 +243,12 @@ describe("session recovery", () => {
     });
     await vi.waitFor(() => expect(sweep).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(recovered).toBe(true));
-    expect(t.continueAfterRestart.mock.calls.map((c) => c[0])).toEqual(["first"]);
+    expect(marked(t)).toEqual(["first"]);
 
     // The runner drops and reconnects while the sweep still runs, cutting off another turn.
     t.sessions.set("second", { ...cut, id: "second", status: "running" });
     await t.recovery.onRunnerReady();
-    expect(t.continueAfterRestart.mock.calls.map((c) => c[0])).toEqual(["first", "second"]);
+    expect(marked(t)).toEqual(["first", "second"]);
     // The reconnect's own sweep waits for the one in progress, then runs.
     expect(sweep).toHaveBeenCalledTimes(1);
     finishSweep();

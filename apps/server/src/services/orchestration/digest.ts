@@ -304,6 +304,8 @@ function noticeDetail(n: Notice): string {
       return ` · ${quote(n.data.note, 2000)} (scheduled for ${n.notBefore ?? n.createdAt})`;
     case "factory.update":
       return ` · ${n.data.event}\n${quote(n.data.text, 4000)}`;
+    case "sessions.cut_off":
+      return ` · ${n.data.sessions.map((c) => `${short(c.sessionId)} ${quote(c.title, 120)} (${c.reason})`).join(", ")} · each waits for Continue (\`continue_session\` when the user asks)`;
   }
 }
 

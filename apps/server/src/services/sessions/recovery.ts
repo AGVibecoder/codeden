@@ -1,20 +1,17 @@
-import type { ProviderInfo, Session } from "@codeden/contracts";
+import type { CutOffReason, ProviderInfo, Session } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { type RunnerDeps, type RunnerPort, runnerForSession } from "../runner-port";
 import { lastCompaction } from "./compact";
+import type { CutOffSessions } from "./cut-off";
 import type { SessionLauncher } from "./launcher";
-import { isTurnRunningError } from "./outbox-holds";
 import type { SessionRepo } from "./repo";
 import type { SessionService } from "./session-service";
-
-/** The message sent to an agent whose turn was cut off by a restart (§4.2). */
-export const RESTART_CONTINUE_MESSAGE =
-  "You were interrupted by a CodeDen restart; continue where you left off.";
 
 export interface RecoveryDeps extends RunnerDeps {
   repo: SessionRepo;
   sessions: SessionService;
   launcher: SessionLauncher;
+  cutOffs: Pick<CutOffSessions, "mark" | "announce">;
   /**
    * After recovery: hide the provider conversations a crash or kill left in a provider's own
    * apps, skipping sessions given to `skip` (`ProviderHistoryService.sweep`).
@@ -26,15 +23,18 @@ export interface RecoveryDeps extends RunnerDeps {
   log?: (message: string) => void;
 }
 
-const CUT_OFF = ["running", "waiting", "interrupted"] as const;
-const isCutOff = (status: string) => (CUT_OFF as readonly string[]).includes(status);
+const UNSETTLED = ["running", "waiting", "interrupted"] as const;
+const isUnsettled = (status: string) => (UNSETTLED as readonly string[]).includes(status);
 
 /**
- * After a runner (re)connects: resume its sessions whose turn was cut off by a runner drain,
- * restart or crash, with an automatic "continue" message (not when that turn was a compaction:
- * those go idle), and deliver messages that were queued before a server restart. Idle sessions
- * are resumed lazily on their next message.
- * Only sessions that runner hosts (`sessions.runnerId`, else the home runner) are touched.
+ * After a runner (re)connects: find its sessions whose turn a runner drain, restart or crash cut
+ * off, and mark them cut off (§4.2) so they wait, red, for a Continue; nothing resumes them by
+ * itself. A session counts as cut off only when its log shows a turn that never ended and the
+ * runner, asked now, no longer hosts it: a runner that kept running (the server restarted
+ * alone) still owns its turns, and starting the session again would run it twice. A cut-off
+ * compaction goes idle instead (there is nothing to continue). Then the messages that were
+ * queued before a server restart are delivered. Only sessions that runner hosts
+ * (`sessions.runnerId`, else the home runner) are touched.
  */
 export class SessionRecovery {
   private readonly running = new Map<string, Promise<void>>();
@@ -68,47 +68,52 @@ export class SessionRecovery {
     // meanwhile can turn `running` while `runner.status` is in flight (its first events can
     // arrive in the same read as the reply) and must not be mistaken for a cut-off one.
     const candidates = repo
-      .list({ status: [...CUT_OFF] })
+      .list({ status: [...UNSETTLED] })
       .filter((s) => !sessions.launching.has(s.id) && onThisRunner(s.id))
       .map((s) => s.id);
-    // Still cut off: not being started, and no message, Retry or queued delivery on its way.
-    const stillCutOff = (id: string) => {
+    // Still unsettled: not being started, and no message, Retry or queued delivery on its way.
+    const stillUnsettled = (id: string) => {
       const session = repo.find(id)?.session;
       return (
         !!session &&
-        isCutOff(session.status) &&
+        isUnsettled(session.status) &&
         !sessions.launching.has(id) &&
         !sessions.isDelivering(id)
       );
     };
-    let hosted = await this.hostedSessions(runner);
+    const hosted = await this.hostedSessions(runner);
     if (!hosted) return;
+    const cut: Session[] = [];
     for (const id of candidates) {
-      if (!stillCutOff(id)) continue;
-      // Resuming the candidates before this one took a while, and the session may have come
-      // back by another path meanwhile: ask the runner again what it hosts now.
-      hosted ??= await this.hostedSessions(runner);
-      if (!hosted) return;
-      if (hosted.has(id) || !stillCutOff(id)) continue;
-      // A runner that died without a word left its turns and approvals open: close them
-      // first, so a dead approval can't keep the resumed session waiting.
+      if (hosted.has(id) || !stillUnsettled(id)) continue;
+      const before = repo.find(id)?.session;
+      // Already cut off and waiting (an earlier restart, a usage limit): left as it is.
+      if (!before || before.cutOff) continue;
+      // Drained: the runner said it was going away. Otherwise it vanished mid-turn.
+      const reason: CutOffReason = before.status === "interrupted" ? "app_closed" : "crash";
+      const turnId = repo.rootTurnIds(before).at(-1) ?? null;
+      // A runner that died without a word left its turns and approvals open: close them, so a
+      // dead approval can't keep the session waiting once it is continued.
       repo.closeOrphanedTurns(id);
       const session = repo.find(id)?.session;
-      if (!session || !isCutOff(session.status)) continue;
+      if (!session || !isUnsettled(session.status)) continue;
       if (lastCompaction(repo, session)) {
         this.settleCompaction(session);
         continue;
       }
-      await this.resume(session, runner.providers());
-      hosted = undefined;
+      if (!this.resumable(session, runner.providers())) continue;
+      this.deps.log?.(`recovery: session ${id} was cut off (${reason}); it waits for Continue`);
+      cut.push(this.deps.cutOffs.mark(id, reason, turnId));
     }
+    this.deps.cutOffs.announce(cut, runnerId ?? "home");
 
     sessions.releaseOutboxes(onThisRunner);
     for (const id of sessions.sessionsWithQueuedMessages().filter(onThisRunner)) {
       await sessions.flushOutbox(id).catch(() => undefined);
     }
 
-    // Sessions resumed above are mid-turn again (and hosted): the sweep leaves them alone.
+    // Sessions the queued messages above resumed are mid-turn again (and hosted): the sweep
+    // leaves them alone.
     this.sweepAfterRecovery(runnerId ?? "", runner);
   }
 
@@ -159,29 +164,23 @@ export class SessionRecovery {
    */
   private settleCompaction(session: Session): void {
     this.deps.log?.(`recovery: session ${session.id} was cut off while compacting; left idle`);
-    this.deps.repo.update(session.id, (s) => (isCutOff(s.status) ? { ...s, status: "idle" } : s));
+    this.deps.repo.update(session.id, (s) =>
+      isUnsettled(s.status) ? { ...s, status: "idle" } : s,
+    );
   }
 
-  private async resume(session: Session, providers: ProviderInfo[]): Promise<void> {
+  /**
+   * Whether the session can be continued at all: through its provider's resume. One that can't
+   * fails as before; there is nothing to wait for.
+   */
+  private resumable(session: Session, providers: ProviderInfo[]): boolean {
     const provider = providers.find((p) => p.id === session.provider);
-    if (!session.resumeToken || !provider?.capabilities.resume) {
-      this.deps.launcher.fail(
-        session.id,
-        "restart",
-        new Error("The session was cut off by a restart and cannot be resumed"),
-      );
-      return;
-    }
-    try {
-      this.deps.log?.(`recovery: resuming session ${session.id}`);
-      await this.deps.sessions.continueAfterRestart(session.id, RESTART_CONTINUE_MESSAGE);
-    } catch (error) {
-      // A turn is running: the session came back by another path, so there is nothing to resume.
-      if (isTurnRunningError(error)) {
-        this.deps.log?.(`recovery: session ${session.id} already has a turn running`);
-        return;
-      }
-      this.deps.launcher.fail(session.id, "restart", error);
-    }
+    if (session.resumeToken && provider?.capabilities.resume) return true;
+    this.deps.launcher.fail(
+      session.id,
+      "restart",
+      new Error("The session was cut off by a restart and cannot be resumed"),
+    );
+    return false;
   }
 }
