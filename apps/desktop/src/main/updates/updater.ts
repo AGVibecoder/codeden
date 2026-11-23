@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { app } from "electron";
+import { killProcessTree, runnerPid } from "../process-tree";
 import { isProcessAlive } from "../server-plan";
 
 /** electron-updater, loaded on first use (GitHub Releases, from `app-update.yml`). */
@@ -32,28 +33,21 @@ export async function loadUpdater(log: (m: string) => void) {
   return updater;
 }
 
-/** Wait for the runner in the lock file to exit; kill it if it outstays the timeout. */
+/**
+ * Wait for the runner in the lock file to exit; if it outstays the timeout, end it with every
+ * agent, terminal and browser it started.
+ */
 export async function waitForRunnerExit(
   lockFile: string,
   timeoutMs: number,
   log: (m: string) => void,
 ) {
-  let pid: number | null = null;
-  try {
-    const { readFileSync } = await import("node:fs");
-    pid = Number(JSON.parse(readFileSync(lockFile, "utf8")).pid) || null;
-  } catch {
-    return;
-  }
+  const pid = runnerPid(lockFile);
   if (!pid) return;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline && isProcessAlive(pid)) await new Promise((r) => setTimeout(r, 200));
   if (isProcessAlive(pid)) {
-    log(`updates: runner ${pid} still running; stopping it`);
-    try {
-      process.kill(pid);
-    } catch {
-      // gone
-    }
+    log(`app: runner ${pid} still running; stopping it and what it started`);
+    killProcessTree(pid);
   }
 }
