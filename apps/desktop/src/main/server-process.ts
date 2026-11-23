@@ -1,6 +1,7 @@
 import { type ChildProcess, fork } from "node:child_process";
 import { mkdirSync, openSync, renameSync, statSync } from "node:fs";
 import { dirname } from "node:path";
+import { killProcessTree } from "./process-tree";
 
 /** The server log is moved aside to `<file>.1` (one copy kept) when it grows past this. */
 const LOG_LIMIT_BYTES = 5 * 1024 * 1024;
@@ -120,7 +121,8 @@ export class ServerProcess {
   /**
    * Close the server; with `stopRunner` the runner drains and exits too (as `codeden stop`),
    * so an update can replace the files it runs from. A server that doesn't exit in time gets
-   * SIGTERM (which ends a stuck close), then SIGKILL, so quitting the app never hangs on it.
+   * SIGTERM (which ends a stuck close), then SIGKILL, so quitting the app never hangs on it;
+   * on Windows its process tree is ended instead.
    */
   async stop(opts: { stopRunner: boolean; timeoutMs?: number; graceMs?: number }): Promise<void> {
     const child = this.child;
@@ -131,7 +133,10 @@ export class ServerProcess {
     this.send({ type: "shutdown", stopRunner: opts.stopRunner });
     if (await settlesWithin(exited, opts.timeoutMs ?? 20_000)) return;
     this.opts.log("server: did not exit in time; stopping it");
-    child.kill();
+    // Windows has no SIGTERM to end a stuck close, and ending only the server would leave
+    // Whisper and the voice model it started running: end the whole tree.
+    if (process.platform === "win32" && child.pid) killProcessTree(child.pid);
+    else child.kill();
     if (await settlesWithin(exited, grace)) return;
     this.opts.log("server: still running; killing it");
     child.kill("SIGKILL");

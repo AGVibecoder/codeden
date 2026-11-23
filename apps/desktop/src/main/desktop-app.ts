@@ -15,6 +15,7 @@ import { type Connection, connect, launchUrl } from "./connection";
 import { armQuitWatchdog, forceExit } from "./exit";
 import { registerBridge } from "./ipc";
 import { appMenuTemplate } from "./menu";
+import { killProcessTree, runnerPid } from "./process-tree";
 import { homeFiles } from "./server-plan";
 import {
   applyLaunchAtLogin,
@@ -198,7 +199,7 @@ export class DesktopApp {
     else this.pendingPath = path;
   }
 
-  /** Quitting: install a downloaded update on the way out, else leave the runner running. */
+  /** Quitting: install a downloaded update on the way out, else stop the server and the runner. */
   beforeQuit(event: Electron.Event): void {
     if (this.quitReady) return;
     event.preventDefault();
@@ -208,6 +209,11 @@ export class DesktopApp {
     // and a separate process for when the main thread itself is stuck in native shutdown.
     const watchdog = setTimeout(() => {
       this.log(`app: still quitting after ${QUIT_LIMIT_MS / 1000} s; exiting now`);
+      // Quit means everything stops: end the server and the runner, and all they started.
+      const serverPid = this.conn?.server?.pid;
+      if (serverPid) killProcessTree(serverPid);
+      const runner = runnerPid(homeFiles(this.args.home).runnerLock);
+      if (runner) killProcessTree(runner);
       forceExit(0);
     }, QUIT_LIMIT_MS);
     const hardStop = armQuitWatchdog(QUIT_LIMIT_MS + 5_000, this.log);
